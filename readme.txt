@@ -4,7 +4,7 @@ Tags: 404, redirect, broken-links, seo, gone
 Requires at least: 5.0
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -92,6 +92,10 @@ Yes. Exact-match rules use a `BINARY(16)` MD5 hash column with its own BTREE ind
 4. The 404 URLs log: sortable hit history with a one-click "Make rule" button on every row.
 
 == Changelog ==
+
+= 1.4.0 =
+* UI rebrand: dropped "404" from headings, navigation, form labels, the admin-bar item, and email digest titles. Replaced with brand-forward labels ("Detour", "Activity", "Default Redirect", "Missing Image Fallback", etc.). Kept "404" where it is the technically meaningful term in body copy.
+* Added wp.org icon and banner assets (128/256 icons, 772x250 / 1544x500 banners).
 
 = 1.3.0 =
 * Coding-style pass against the WordPress-Extra and Universal PHPCS rulesets. Tabs everywhere, K&R braces, paren and bracket spacing, Yoda conditions, and strict comparisons (`===`/`!==`) wherever the right-hand side is a literal. Net: ~4,800 sniff violations cleaned up, no behavior changes.

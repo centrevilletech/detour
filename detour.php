@@ -3,7 +3,7 @@
  * Plugin Name: Detour
  * Plugin URI:  https://github.com/centrevilletech/detour
  * Description: Catch every 404 and route lost visitors to a destination that converts. Per-URL redirect rules with 301/302/307/308/410 support, sortable hit history, weekly email digests, and an indexed schema engineered for high-traffic sites.
- * Version:     1.3.0
+ * Version:     1.4.0
  * Author:      Centreville Tech LLC
  * Author URI:  https://centrevilletech.com
  * License:     GPL-2.0-or-later
@@ -68,10 +68,10 @@ function detour_free_add_items( $admin_bar ) {
 			'id'     => 'detour_free_top_button',
 			'parent' => null,
 			'group'  => null,
-			'title'  => '<span class="ab-icon"></span>404 Stats',
+			'title'  => '<span class="ab-icon"></span>Detour',
 			'href'   => admin_url( 'admin.php?page=detour.php&mytab=404urls' ),
 			'meta'   => array(
-				'title' => '404 Links',
+				'title' => 'Detour',
 				'class' => '',
 			),
 		);
@@ -175,12 +175,12 @@ function detour_free_add_items( $admin_bar ) {
 		// View All button
 		. '<div style="text-align: center; margin-top: 10px;">'
 		. '<a href="' . esc_url( admin_url( 'admin.php?page=detour.php&mytab=404urls' ) ) . '" class="p404-redirect-btn" style="background: #dc3545; color: #fff; padding: 8px 18px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 13px; display: inline-block; transition: background 0.2s;" onmouseover="this.style.background=\'#c82333\'" onmouseout="this.style.background=\'#dc3545\'">'
-		. __( 'View All 404s', 'detour' ) . '</a>'
+		. __( 'View all activity', 'detour' ) . '</a>'
 		. '</div>'
 		. '</div>';
 
 	// Menu title
-	$menu_title = '<span class="ab-icon"></span> ' . __( '404 Stats', 'detour' );
+	$menu_title = '<span class="ab-icon"></span> ' . __( 'Detour', 'detour' );
 
 	$admin_bar->add_menu(
 		array(
@@ -188,7 +188,7 @@ function detour_free_add_items( $admin_bar ) {
 			'title' => $menu_title,
 			'href'  => false,
 			'meta'  => array(
-				'title' => __( '404 Redirect Statistics', 'detour' ),
+				'title' => __( 'Detour activity', 'detour' ),
 				'class' => 'p404-redirect-admin-bar',
 			),
 		)

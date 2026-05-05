@@ -205,7 +205,7 @@ $notification_email = Detour_read_option_value( 'notification_email', get_option
 <div class="wrap p404-admin-wrap">
 	<div class="p404-header">
 		<h1>Detour</h1>
-		<p>Manage your 404 error redirections and broken image handling with professional-grade controls</p>
+		<p>Catch every dead link, route lost visitors to a destination that converts, and keep an eye on what is breaking.</p>
 	</div>
 
 	<?php
@@ -235,7 +235,7 @@ $notification_email = Detour_read_option_value( 'notification_email', get_option
 			echo 'nav-tab-active';}
 		?>
 		">
-			<span class="dashicons dashicons-list-view"></span> 404 URLs
+			<span class="dashicons dashicons-list-view"></span> Activity
 		</a>
 	</nav>
 
@@ -243,10 +243,10 @@ $notification_email = Detour_read_option_value( 'notification_email', get_option
 		<?php if ( 'options' === $mytab ) { ?>
 			<form method="POST" class="p404-options-form">
 				<div class="form-section">
-					<h3><span class="dashicons dashicons-admin-page"></span> 404 Pages Settings</h3>
+					<h3><span class="dashicons dashicons-admin-page"></span> Default Redirect</h3>
 					<div class="form-content">
 						<div class="form-group">
-							<label class="form-label">404 Redirection Status:</label>
+							<label class="form-label">Status:</label>
 							<div class="form-control">
 								<?php
 								$drop = new Detour_Dropdown( 'p404_status' );
@@ -255,17 +255,17 @@ $notification_email = Detour_read_option_value( 'notification_email', get_option
 								$drop->dropdown_print();
 								$drop->select( $options['p404_status'] );
 								?>
-								<div class="help-text">Enable or disable 404 page redirections to improve user experience</div>
+								<div class="help-text">Turn the default redirect on or off. Per-URL Rules still apply when enabled.</div>
 							</div>
 						</div>
 
 						<div class="form-group">
-							<label class="form-label">Redirect all 404 pages to:</label>
+							<label class="form-label">Default destination:</label>
 							<div class="form-control">
 								<input type="text" name="redirect_to" id="redirect_to"
 									value="<?php echo esc_attr( $options['p404_redirect_to'] ); ?>"
 									placeholder="https://example.com">
-								<div class="help-text">Enter the destination URL where visitors should be redirected when they encounter 404 errors</div>
+								<div class="help-text">Where to send visitors when no rule matches the request.</div>
 							</div>
 						</div>
 
@@ -295,17 +295,17 @@ $notification_email = Detour_read_option_value( 'notification_email', get_option
 								$detour_execlude_media_val = isset( $options['p404_execlude_media'] ) ? $options['p404_execlude_media'] : '1';
 								$drop->select( $detour_execlude_media_val );
 								?>
-								<div class="help-text">Exclude media files (images, videos, etc.) from 404 logging to keep your database clean and efficient</div>
+								<div class="help-text">Skip missing media file requests in the activity log to keep it focused on real pages.</div>
 							</div>
 						</div>
 					</div>
 				</div>
 
 				<div class="form-section">
-					<h3><span class="dashicons dashicons-format-image"></span> 404 Images Settings</h3>
+					<h3><span class="dashicons dashicons-format-image"></span> Missing Image Fallback</h3>
 					<div class="form-content">
 						<div class="form-group">
-							<label class="form-label">Image 404 Redirection Status:</label>
+							<label class="form-label">Image fallback status:</label>
 							<div class="form-control">
 								<?php
 								$drop = new Detour_Dropdown( 'img_p404_status' );
@@ -325,7 +325,7 @@ $notification_email = Detour_read_option_value( 'notification_email', get_option
 						</div>
 
 						<div class="form-group">
-							<label class="form-label">Default Image for 404 errors:</label>
+							<label class="form-label">Fallback image:</label>
 							<div class="form-control">
 								<div class="image-upload-section">
 									<?php
@@ -334,7 +334,7 @@ $notification_email = Detour_read_option_value( 'notification_email', get_option
 										$image = wp_get_attachment_image_src( $image_id );
 										?>
 										<div class="image-preview">
-											<img src="<?php echo esc_url( $image[0] ); ?>" alt="404 Default Image" />
+											<img src="<?php echo esc_url( $image[0] ); ?>" alt="Fallback image" />
 										</div>
 										<a href="#" class="btn btn-primary misha-upl">
 											<span class="dashicons dashicons-edit"></span> Change Image
@@ -440,7 +440,7 @@ $notification_email = Detour_read_option_value( 'notification_email', get_option
 #e2e8f0; border-radius: 8px; padding: 15px;">
 									<ul style="margin: 0; padding-left: 20px; color: 
 #4b5563; line-height: 1.6;">
-										<li>📊 Total 404 errors count</li>
+										<li>📊 Total redirects</li>
 										<li>🔗 Most frequent broken URLs</li>
 										<li>📈 Trend compared to previous period</li>
 										<li>🌐 Top referrers causing 404s</li>
@@ -712,8 +712,8 @@ $notification_email = Detour_read_option_value( 'notification_email', get_option
 											<p style="margin: 0;">No URLs match your search for "<?php echo esc_html( $search ); ?>"</p>
 											<p style="margin: 8px 0 0 0;"><a href="<?php echo esc_url( remove_query_arg( 's' ) ); ?>" style="color: #2563eb;">Clear search</a> to see all results.</p>
 										<?php } else { ?>
-											<h4 style="margin: 0 0 8px 0; color: #374151;">No 404 Redirects Yet</h4>
-											<p style="margin: 0;">When visitors encounter 404 errors, they'll appear here.</p>
+											<h4 style="margin: 0 0 8px 0; color: #374151;">No activity yet</h4>
+											<p style="margin: 0;">Activity will appear here as visitors hit pages that do not exist.</p>
 										<?php } ?>
 									</div>
 								</td>
@@ -805,10 +805,10 @@ $notification_email = Detour_read_option_value( 'notification_email', get_option
 						<h2>Confirm Data Deletion</h2>
 					</div>
 					<div class="p404-modal-body">
-						<p>You are about to permanently delete all 404 redirect logs from the database.</p>
+						<p>You are about to permanently delete the entire activity log from the database.</p>
 						<p><strong>This action cannot be undone and will remove:</strong></p>
 						<ul style="margin: 15px 0; padding-left: 20px; color: #4b5563;">
-							<li>All recorded 404 URLs</li>
+							<li>All recorded URLs</li>
 							<li>Redirect counts and timestamps</li>
 							<li>Historical tracking data</li>
 						</ul>
@@ -963,7 +963,7 @@ $notification_email = Detour_read_option_value( 'notification_email', get_option
 				// Update the entire container with new image
 				container.html(
 					'<div class="image-preview">' +
-					'<img src="' + attachment.url + '" alt="404 Default Image" />' +
+					'<img src="' + attachment.url + '" alt="Fallback image" />' +
 					'</div>' +
 					'<a href="#" class="btn btn-primary misha-upl">' +
 					'<span class="dashicons dashicons-edit"></span> Change Image' +
