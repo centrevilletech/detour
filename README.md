@@ -1,3 +1,5 @@
+![Detour](.wordpress-org/banner-1544x500.png)
+
 # Detour
 
 **Catch every 404 and route lost visitors to a destination that converts.**
