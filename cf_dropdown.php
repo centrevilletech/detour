@@ -1,56 +1,59 @@
 <?php
-if (! defined('ABSPATH')) exit; // Exit if accessed directly
-if (!class_exists('Detour_Dropdown')) {
-	class Detour_Dropdown
-	{
+if ( ! defined( 'ABSPATH' ) ) {
+	exit; // Exit if accessed directly
+}
+if ( ! class_exists( 'Detour_Dropdown' ) ) {
+	class Detour_Dropdown {
 
-		private $name = 'drop';
-		private $options = array();
-		private $class = '';
+
+		private $name     = 'drop';
+		private $options  = array();
+		private $class    = '';
 		private $onchange = '';
 
-		public function __construct($str, $class = '', $onchange = '')
-		{
+		public function __construct( $str, $class = '', $onchange = '' ) {
 			$this->name = $str;
 
-			if ($class != '')
+			if ( '' !== $class ) {
 				$this->class = $class;
+			}
 
-			if ($onchange != '')
+			if ( '' !== $onchange ) {
 				$this->onchange = $onchange;
+			}
 		}
 
-		public function add($name, $value)
-		{
+		public function add( $name, $value ) {
 			$this->options[] = array(
-				'key' => esc_html($value),
-				'name' => esc_html($name)
+				'key'  => esc_html( $value ),
+				'name' => esc_html( $name ),
 			);
 		}
 
-		public function dropdown_print()
-		{
-?>
-			<select size='1' name='<?php esc_attr_e($this->name); ?>' <?php if ($this->onchange != '') { ?> onchange='<?php esc_attr_e($this->onchange); ?>' <?php } ?> id='<?php esc_attr_e($this->name); ?>'>
-				<?php
-				foreach ($this->options as $options) {
+		public function dropdown_print() {
+			?>
+			<select size='1' name='<?php esc_attr_e( $this->name ); ?>' 
+			<?php
+			if ( '' !== $this->onchange ) {
 				?>
-					<option value="<?php esc_html_e($options['key']); ?>"><?php esc_html_e($options['name']); ?></option>
+				onchange='<?php esc_attr_e( $this->onchange ); ?>' <?php } ?> id='<?php esc_attr_e( $this->name ); ?>'>
 				<?php
+				foreach ( $this->options as $options ) {
+					?>
+					<option value="<?php esc_html_e( $options['key'] ); ?>"><?php esc_html_e( $options['name'] ); ?></option>
+					<?php
 				}
 				?>
 			</select>
-		<?php
-
+			<?php
 		}
 
-		public function select($str)
-		{
-		?>
+		public function select( $str ) {
+			?>
 			<script>
-				document.getElementById('<?php echo esc_js($this->name); ?>').value = '<?php echo esc_js($str); ?>'
+				document.getElementById('<?php echo esc_js( $this->name ); ?>').value = '<?php echo esc_js( $str ); ?>'
 			</script>
-<?php
+			<?php
 		}
 	}
 }

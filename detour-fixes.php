@@ -6,7 +6,9 @@
  * plugins_loaded calls short-circuit cheaply.
  */
 
-if ( ! defined( 'ABSPATH' ) ) exit;
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 const DETOUR_SCHEMA_VERSION = '1';
 const DETOUR_SCHEMA_OPTION  = 'centct_p404_schema_version';
@@ -16,77 +18,81 @@ const DETOUR_SCHEMA_OPTION  = 'centct_p404_schema_version';
  * and that the duplicate idx_url_hash prefix index is removed.
  */
 function detour_ensure_schema() {
-    // Always check the rules table - it owns its own schema-version option
-    // and short-circuits cheaply when already at the current version.
-    if ( function_exists( 'detour_create_rules_table' ) ) {
-        detour_create_rules_table();
-    }
+	// Always check the rules table - it owns its own schema-version option
+	// and short-circuits cheaply when already at the current version.
+	if ( function_exists( 'detour_create_rules_table' ) ) {
+		detour_create_rules_table();
+	}
 
-    if ( get_option( DETOUR_SCHEMA_OPTION ) === DETOUR_SCHEMA_VERSION ) {
-        return;
-    }
+	if ( get_option( DETOUR_SCHEMA_OPTION ) === DETOUR_SCHEMA_VERSION ) {
+		return;
+	}
 
-    global $wpdb;
-    $table = $wpdb->prefix . 'redirects_404';
+	global $wpdb;
+	$table = $wpdb->prefix . 'redirects_404';
 
-    $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
-    if ( $exists !== $table ) {
-        return;
-    }
+	$exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+	if ( $exists !== $table ) {
+		return;
+	}
 
-    // 1. Drop the misnamed duplicate prefix index if still present.
-    $dup = $wpdb->get_results(
-        $wpdb->prepare(
-            "SELECT COLUMN_NAME, SUB_PART FROM information_schema.STATISTICS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND INDEX_NAME = %s",
-            $table, 'idx_url_hash'
-        )
-    );
-    if ( ! empty( $dup ) && $dup[0]->COLUMN_NAME === 'url' && (int) $dup[0]->SUB_PART === 191 ) {
-        $wpdb->query( "ALTER TABLE `{$table}` DROP KEY `idx_url_hash`" );
-    }
+	// 1. Drop the misnamed duplicate prefix index if still present.
+	$dup = $wpdb->get_results(
+		$wpdb->prepare(
+			'SELECT COLUMN_NAME, SUB_PART FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND INDEX_NAME = %s',
+			$table,
+			'idx_url_hash'
+		)
+	);
+	if ( ! empty( $dup ) && 'url' === $dup[0]->COLUMN_NAME && (int) 191 === $dup[0]->SUB_PART ) {
+		$wpdb->query( "ALTER TABLE `{$table}` DROP KEY `idx_url_hash`" );
+	}
 
-    // 2. Add a real hash column if missing.
-    $has_col = (int) $wpdb->get_var(
-        $wpdb->prepare(
-            "SELECT COUNT(*) FROM information_schema.COLUMNS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s",
-            $table, 'url_hash'
-        )
-    );
-    if ( ! $has_col ) {
-        $wpdb->query(
-            "ALTER TABLE `{$table}`
+	// 2. Add a real hash column if missing.
+	$has_col = (int) $wpdb->get_var(
+		$wpdb->prepare(
+			'SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s',
+			$table,
+			'url_hash'
+		)
+	);
+	if ( ! $has_col ) {
+		$wpdb->query(
+			"ALTER TABLE `{$table}`
              ADD COLUMN `url_hash` BINARY(16)
              GENERATED ALWAYS AS (UNHEX(MD5(`url`))) STORED"
-        );
-    }
+		);
+	}
 
-    // 3. Add real hash key.
-    $has_hash_key = (int) $wpdb->get_var(
-        $wpdb->prepare(
-            "SELECT COUNT(*) FROM information_schema.STATISTICS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND INDEX_NAME = %s",
-            $table, 'idx_url_hash_real'
-        )
-    );
-    if ( ! $has_hash_key ) {
-        $wpdb->query( "ALTER TABLE `{$table}` ADD KEY `idx_url_hash_real` (`url_hash`)" );
-    }
+	// 3. Add real hash key.
+	$has_hash_key = (int) $wpdb->get_var(
+		$wpdb->prepare(
+			'SELECT COUNT(*) FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND INDEX_NAME = %s',
+			$table,
+			'idx_url_hash_real'
+		)
+	);
+	if ( ! $has_hash_key ) {
+		$wpdb->query( "ALTER TABLE `{$table}` ADD KEY `idx_url_hash_real` (`url_hash`)" );
+	}
 
-    // 4. Add count index for admin sort-by-hits.
-    $has_count_key = (int) $wpdb->get_var(
-        $wpdb->prepare(
-            "SELECT COUNT(*) FROM information_schema.STATISTICS
-             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND INDEX_NAME = %s",
-            $table, 'idx_count'
-        )
-    );
-    if ( ! $has_count_key ) {
-        $wpdb->query( "ALTER TABLE `{$table}` ADD KEY `idx_count` (`count`)" );
-    }
+	// 4. Add count index for admin sort-by-hits.
+	$has_count_key = (int) $wpdb->get_var(
+		$wpdb->prepare(
+			'SELECT COUNT(*) FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND INDEX_NAME = %s',
+			$table,
+			'idx_count'
+		)
+	);
+	if ( ! $has_count_key ) {
+		$wpdb->query( "ALTER TABLE `{$table}` ADD KEY `idx_count` (`count`)" );
+	}
 
-    update_option( DETOUR_SCHEMA_OPTION, DETOUR_SCHEMA_VERSION, false );
+	update_option( DETOUR_SCHEMA_OPTION, DETOUR_SCHEMA_VERSION, false );
 }
 
 /**
@@ -120,12 +126,12 @@ add_action( 'plugins_loaded', 'detour_migrate_legacy_cron', 20 );
  * Returns the row object or null.
  */
 function detour_find_recent_entry( $url, $ip_address, $referrer, $cutoff_datetime ) {
-    global $wpdb;
-    $table = $wpdb->prefix . 'redirects_404';
+	global $wpdb;
+	$table = $wpdb->prefix . 'redirects_404';
 
-    return $wpdb->get_row(
-        $wpdb->prepare(
-            "SELECT id, count FROM `{$table}`
+	return $wpdb->get_row(
+		$wpdb->prepare(
+			"SELECT id, count FROM `{$table}`
              WHERE url_hash = UNHEX(MD5(%s))
                AND url = %s
                AND ip_address = %s
@@ -133,7 +139,11 @@ function detour_find_recent_entry( $url, $ip_address, $referrer, $cutoff_datetim
                AND last_redirected > %s
              ORDER BY last_redirected DESC
              LIMIT 1",
-            $url, $url, $ip_address, $referrer, $cutoff_datetime
-        )
-    );
+			$url,
+			$url,
+			$ip_address,
+			$referrer,
+			$cutoff_datetime
+		)
+	);
 }

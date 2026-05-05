@@ -4,7 +4,7 @@ Tags: 404, redirect, broken-links, seo, gone
 Requires at least: 5.0
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -92,6 +92,9 @@ Yes. Exact-match rules use a `BINARY(16)` MD5 hash column with its own BTREE ind
 4. The 404 URLs log: sortable hit history with a one-click "Make rule" button on every row.
 
 == Changelog ==
+
+= 1.3.0 =
+* Coding-style pass against the WordPress-Extra and Universal PHPCS rulesets. Tabs everywhere, K&R braces, paren and bracket spacing, Yoda conditions, and strict comparisons (`===`/`!==`) wherever the right-hand side is a literal. Net: ~4,800 sniff violations cleaned up, no behavior changes.
 
 = 1.2.0 =
 * Refactored every PHP identifier (functions, classes, constants) onto a unified `detour_` / `Detour_` / `DETOUR_` prefix for stronger isolation. Existing options, table names, and stored data are unchanged.

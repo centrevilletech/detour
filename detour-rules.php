@@ -7,10 +7,12 @@
  * cache with a versioned bust on every rule write.
  */
 
-if ( ! defined( 'ABSPATH' ) ) exit;
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
-const DETOUR_RULES_VERSION = '1';
-const DETOUR_RULES_CACHE_GROUP   = 'detour_rules';
+const DETOUR_RULES_VERSION     = '1';
+const DETOUR_RULES_CACHE_GROUP = 'detour_rules';
 
 function detour_rules_table_name() {
 	global $wpdb;
@@ -65,7 +67,7 @@ function detour_create_rules_table() {
 
 function detour_rules_cache_version() {
 	$v = wp_cache_get( 'rules_cache_v', DETOUR_RULES_CACHE_GROUP );
-	if ( $v === false ) {
+	if ( false === $v ) {
 		$v = 1;
 		wp_cache_set( 'rules_cache_v', $v, DETOUR_RULES_CACHE_GROUP );
 	}
@@ -109,7 +111,7 @@ function detour_match_rule( $url ) {
 	// 2. Prefix match - longest-pattern wins.
 	$v            = detour_rules_cache_version();
 	$prefix_rules = wp_cache_get( "prefix_rules_v{$v}", DETOUR_RULES_CACHE_GROUP );
-	if ( $prefix_rules === false ) {
+	if ( false === $prefix_rules ) {
 		$prefix_rules = $wpdb->get_results(
 			"SELECT * FROM `{$table}`
 			 WHERE match_type = 'prefix' AND is_active = 1
@@ -126,7 +128,7 @@ function detour_match_rule( $url ) {
 
 	// 3. Regex match - first match wins, evaluation order = id ASC.
 	$regex_rules = wp_cache_get( "regex_rules_v{$v}", DETOUR_RULES_CACHE_GROUP );
-	if ( $regex_rules === false ) {
+	if ( false === $regex_rules ) {
 		$regex_rules = $wpdb->get_results(
 			"SELECT * FROM `{$table}`
 			 WHERE match_type = 'regex' AND is_active = 1
@@ -152,7 +154,7 @@ function detour_match_rule( $url ) {
 function detour_normalize_regex( $pattern ) {
 	$pattern = (string) $pattern;
 	$pattern = str_replace( array( "\r", "\n" ), '', $pattern );
-	if ( $pattern === '' ) {
+	if ( '' === $pattern ) {
 		return '~$.^~'; // never matches
 	}
 	$first = $pattern[0];
@@ -181,7 +183,7 @@ function detour_apply_rule( $rule, $url ) {
 
 	$status = (int) $rule['redirect_status'];
 
-	if ( $status === 410 ) {
+	if ( 410 === $status ) {
 		status_header( 410 );
 		nocache_headers();
 		header( 'Content-Type: text/html; charset=utf-8' );
@@ -191,12 +193,12 @@ function detour_apply_rule( $rule, $url ) {
 	}
 
 	$destination = (string) $rule['destination_url'];
-	if ( $destination === '' ) {
+	if ( '' === $destination ) {
 		return; // misconfigured; let caller fall through to global default
 	}
 
 	// {path} substitution for prefix rules: append the unmatched tail.
-	if ( $rule['match_type'] === 'prefix' && strpos( $destination, '{path}' ) !== false ) {
+	if ( 'prefix' === $rule['match_type'] && strpos( $destination, '{path}' ) !== false ) {
 		$tail        = substr( $url, strlen( $rule['source_pattern'] ) );
 		$destination = str_replace( '{path}', $tail, $destination );
 	}
@@ -230,10 +232,10 @@ function detour_get_rules( $args = array() ) {
 
 	$where  = 'WHERE 1=1';
 	$params = array();
-	if ( $args['search'] !== '' ) {
-		$where  .= ' AND (source_pattern LIKE %s OR destination_url LIKE %s OR notes LIKE %s)';
-		$like    = '%' . $wpdb->esc_like( $args['search'] ) . '%';
-		$params  = array( $like, $like, $like );
+	if ( '' !== $args['search'] ) {
+		$where .= ' AND (source_pattern LIKE %s OR destination_url LIKE %s OR notes LIKE %s)';
+		$like   = '%' . $wpdb->esc_like( $args['search'] ) . '%';
+		$params = array( $like, $like, $like );
 	}
 
 	$count_sql = "SELECT COUNT(*) FROM `{$table}` {$where}";
@@ -309,7 +311,7 @@ function detour_update_rule( $id, $data ) {
 		array( '%s', '%s', '%s', '%d', '%d', '%s' ),
 		array( '%d' )
 	);
-	if ( $ok === false ) {
+	if ( false === $ok ) {
 		return new WP_Error( 'db_update', $wpdb->last_error ?: 'Update failed' );
 	}
 	detour_rules_bump_cache();
@@ -324,7 +326,7 @@ function detour_delete_rule( $id ) {
 		array( '%d' )
 	);
 	detour_rules_bump_cache();
-	return $ok !== false;
+	return false !== $ok;
 }
 
 function detour_toggle_rule( $id ) {
@@ -346,7 +348,7 @@ function detour_sanitize_rule_input( $data ) {
 		? $data['match_type'] : 'exact';
 
 	$source_pattern = isset( $data['source_pattern'] ) ? trim( (string) $data['source_pattern'] ) : '';
-	if ( $source_pattern === '' ) {
+	if ( '' === $source_pattern ) {
 		return new WP_Error( 'invalid_source', 'Source pattern is required.' );
 	}
 	if ( strlen( $source_pattern ) > 2000 ) {
@@ -359,8 +361,8 @@ function detour_sanitize_rule_input( $data ) {
 	}
 
 	$destination_url = isset( $data['destination_url'] ) ? trim( (string) $data['destination_url'] ) : '';
-	if ( $redirect_status !== 410 ) {
-		if ( $destination_url === '' ) {
+	if ( 410 !== $redirect_status ) {
+		if ( '' === $destination_url ) {
 			return new WP_Error( 'invalid_dest', 'Destination URL is required for non-410 rules.' );
 		}
 		if ( strlen( $destination_url ) > 2000 ) {
@@ -374,7 +376,7 @@ function detour_sanitize_rule_input( $data ) {
 		$destination_url = '';
 	}
 
-	if ( $match_type === 'regex' ) {
+	if ( 'regex' === $match_type ) {
 		$pattern = detour_normalize_regex( $source_pattern );
 		if ( @preg_match( $pattern, '' ) === false ) {
 			return new WP_Error( 'invalid_regex', 'Invalid regular expression in source pattern.' );
@@ -394,10 +396,10 @@ function detour_sanitize_rule_input( $data ) {
 // AJAX endpoints
 // ============================================================
 
-add_action( 'wp_ajax_centct_p404_save_rule',   'detour_ajax_save_rule' );
+add_action( 'wp_ajax_centct_p404_save_rule', 'detour_ajax_save_rule' );
 add_action( 'wp_ajax_centct_p404_delete_rule', 'detour_ajax_delete_rule' );
 add_action( 'wp_ajax_centct_p404_toggle_rule', 'detour_ajax_toggle_rule' );
-add_action( 'wp_ajax_centct_p404_get_rule',    'detour_ajax_get_rule' );
+add_action( 'wp_ajax_centct_p404_get_rule', 'detour_ajax_get_rule' );
 
 function detour_ajax_check() {
 	if ( ! check_ajax_referer( 'detour_rules', 'nonce', false ) ) {
@@ -412,12 +414,12 @@ function detour_ajax_save_rule() {
 	detour_ajax_check();
 	$id   = isset( $_POST['id'] ) ? (int) $_POST['id'] : 0;
 	$data = array(
-		'match_type'      => isset( $_POST['match_type'] )      ? wp_unslash( $_POST['match_type'] )      : 'exact',
-		'source_pattern'  => isset( $_POST['source_pattern'] )  ? wp_unslash( $_POST['source_pattern'] )  : '',
+		'match_type'      => isset( $_POST['match_type'] ) ? wp_unslash( $_POST['match_type'] ) : 'exact',
+		'source_pattern'  => isset( $_POST['source_pattern'] ) ? wp_unslash( $_POST['source_pattern'] ) : '',
 		'destination_url' => isset( $_POST['destination_url'] ) ? wp_unslash( $_POST['destination_url'] ) : '',
-		'redirect_status' => isset( $_POST['redirect_status'] ) ? (int) $_POST['redirect_status']        : 301,
-		'is_active'       => isset( $_POST['is_active'] )       ? (int) $_POST['is_active']              : 0,
-		'notes'           => isset( $_POST['notes'] )           ? wp_unslash( $_POST['notes'] )          : '',
+		'redirect_status' => isset( $_POST['redirect_status'] ) ? (int) $_POST['redirect_status'] : 301,
+		'is_active'       => isset( $_POST['is_active'] ) ? (int) $_POST['is_active'] : 0,
+		'notes'           => isset( $_POST['notes'] ) ? wp_unslash( $_POST['notes'] ) : '',
 	);
 
 	$result = $id > 0 ? detour_update_rule( $id, $data ) : detour_create_rule( $data );
@@ -430,15 +432,21 @@ function detour_ajax_save_rule() {
 function detour_ajax_delete_rule() {
 	detour_ajax_check();
 	$id = isset( $_POST['id'] ) ? (int) $_POST['id'] : 0;
-	if ( $id <= 0 ) wp_send_json_error( 'Bad id' );
-	if ( detour_delete_rule( $id ) ) wp_send_json_success();
+	if ( $id <= 0 ) {
+		wp_send_json_error( 'Bad id' );
+	}
+	if ( detour_delete_rule( $id ) ) {
+		wp_send_json_success();
+	}
 	wp_send_json_error( 'Delete failed' );
 }
 
 function detour_ajax_toggle_rule() {
 	detour_ajax_check();
 	$id = isset( $_POST['id'] ) ? (int) $_POST['id'] : 0;
-	if ( $id <= 0 ) wp_send_json_error( 'Bad id' );
+	if ( $id <= 0 ) {
+		wp_send_json_error( 'Bad id' );
+	}
 	detour_toggle_rule( $id );
 	wp_send_json_success();
 }
@@ -447,7 +455,9 @@ function detour_ajax_get_rule() {
 	detour_ajax_check();
 	$id   = isset( $_POST['id'] ) ? (int) $_POST['id'] : 0;
 	$rule = detour_get_rule( $id );
-	if ( ! $rule ) wp_send_json_error( 'Not found', 404 );
+	if ( ! $rule ) {
+		wp_send_json_error( 'Not found', 404 );
+	}
 	wp_send_json_success( $rule );
 }
 
@@ -463,16 +473,18 @@ function detour_render_rules_tab() {
 	$current_page = max( 1, isset( $_GET['paged'] ) ? (int) $_GET['paged'] : 1 );
 	$per_page     = 20;
 	$orderby      = isset( $_GET['orderby'] ) ? sanitize_text_field( $_GET['orderby'] ) : 'id';
-	$order        = isset( $_GET['order'] )   ? sanitize_text_field( $_GET['order'] )   : 'DESC';
-	$search       = isset( $_GET['s'] )       ? sanitize_text_field( $_GET['s'] )       : '';
+	$order        = isset( $_GET['order'] ) ? sanitize_text_field( $_GET['order'] ) : 'DESC';
+	$search       = isset( $_GET['s'] ) ? sanitize_text_field( $_GET['s'] ) : '';
 
-	$data = detour_get_rules( array(
-		'page'     => $current_page,
-		'per_page' => $per_page,
-		'orderby'  => $orderby,
-		'order'    => $order,
-		'search'   => $search,
-	) );
+	$data = detour_get_rules(
+		array(
+			'page'     => $current_page,
+			'per_page' => $per_page,
+			'orderby'  => $orderby,
+			'order'    => $order,
+			'search'   => $search,
+		)
+	);
 
 	$promote_url = isset( $_GET['promote'] ) ? esc_url_raw( wp_unslash( $_GET['promote'] ) ) : '';
 	$nonce       = wp_create_nonce( 'detour_rules' );
@@ -491,7 +503,7 @@ function detour_render_rules_tab() {
 			<input type="hidden" name="mytab" value="rules">
 			<input type="search" name="s" value="<?php echo esc_attr( $search ); ?>" placeholder="Search source, destination, or notes" style="padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;width:320px;">
 			<button type="submit" class="button">Search</button>
-			<?php if ( $search !== '' ) : ?>
+			<?php if ( '' !== $search ) : ?>
 				<a href="<?php echo esc_url( remove_query_arg( 's' ) ); ?>" class="button">Clear</a>
 			<?php endif; ?>
 		</form>
@@ -515,10 +527,16 @@ function detour_render_rules_tab() {
 						<tr><td colspan="8" style="text-align:center;padding:40px 20px;color:#6b7280;">
 							<p style="margin:0;">No rules yet. Click <strong>+ Add Rule</strong> above, or <a href="?page=detour.php&amp;mytab=404urls">promote a logged 404</a>.</p>
 						</td></tr>
-					<?php else : foreach ( $data['rows'] as $r ) :
-						$is_410     = (int) $r['redirect_status'] === 410;
-						$type_color = array( 'exact' => '#16a34a', 'prefix' => '#0ea5e9', 'regex' => '#a855f7' );
-						?>
+						<?php
+					else :
+						foreach ( $data['rows'] as $r ) :
+							$is_410     = (int) 410 === $r['redirect_status'];
+							$type_color = array(
+								'exact'  => '#16a34a',
+								'prefix' => '#0ea5e9',
+								'regex'  => '#a855f7',
+							);
+							?>
 						<tr data-rule-id="<?php echo (int) $r['id']; ?>">
 							<td><input type="checkbox" class="centct-toggle" <?php checked( (int) $r['is_active'], 1 ); ?>></td>
 							<td>
@@ -538,7 +556,10 @@ function detour_render_rules_tab() {
 								<button type="button" class="button button-small centct-delete" style="color:#dc2626;">Delete</button>
 							</td>
 						</tr>
-					<?php endforeach; endif; ?>
+											<?php
+					endforeach;
+endif;
+					?>
 				</tbody>
 			</table>
 		</div>
