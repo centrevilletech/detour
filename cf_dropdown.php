@@ -52,14 +52,5 @@ if (!class_exists('p404redirect_dropdown')) {
 			</script>
 <?php
 		}
-
-		public function data_bind($tbl, $name = "name", $id = "id", $where = "", $order = "", $limit = "")
-		{
-			global $mysql;
-			$res = $mysql->sql(" select $id,$name from PREFIX_$tbl $where $order $limit ");
-			while ($ar = mysqli_fetch_array($res)) {
-				$this->add($ar[1], $ar[0]);
-			}
-		}
 	}
 }

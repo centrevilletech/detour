@@ -26,10 +26,9 @@ function p404_check_and_upgrade_database()
 		// Only mark as completed if upgrade was successful
 		if ($upgrade_success) {
 			update_option('P404_email_update', 1);
-			error_log("P404 Plugin: Database upgrade completed successfully via plugins_loaded");
 		} else {
 			// Log failure but don't mark as completed - will retry on next load
-			error_log("P404 Plugin: Database upgrade failed, will retry on next page load");
+			error_log("Detour: Database upgrade failed, will retry on next page load");
 		}
 	}
 }
@@ -87,7 +86,7 @@ function p404_create_new_table_with_columns_secure($table_name)
 
 		// Check for errors
 		if ($wpdb->last_error) {
-			error_log("P404 Plugin: Database error creating table - " . $wpdb->last_error);
+			error_log("Detour: Database error creating table - " . $wpdb->last_error);
 			return false;
 		}
 
@@ -95,14 +94,12 @@ function p404_create_new_table_with_columns_secure($table_name)
 		$table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name));
 
 		if ($table_exists != $table_name) {
-			error_log("P404 Plugin: Table creation verification failed");
+			error_log("Detour: Table creation verification failed");
 			return false;
 		}
-
-		error_log("P404 Plugin: New table created with all columns");
 		return true;
 	} catch (Exception $e) {
-		error_log("P404 Plugin: Exception creating new table - " . $e->getMessage());
+		error_log("Detour: Exception creating new table - " . $e->getMessage());
 		return false;
 	}
 }
@@ -122,9 +119,8 @@ function create_redirects_table()
 
 			if ($upgrade_success) {
 				update_option('P404_email_update', 1);
-				error_log("P404 Plugin: Database upgrade completed successfully");
 			} else {
-				error_log("P404 Plugin: Database upgrade failed");
+				error_log("Detour: Database upgrade failed");
 				return false;
 			}
 		}
@@ -133,13 +129,13 @@ function create_redirects_table()
 		$table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name));
 
 		if ($wpdb->last_error) {
-			error_log('P404 Plugin: Database error checking table existence - ' . $wpdb->last_error);
+			error_log('Detour: Database error checking table existence - ' . $wpdb->last_error);
 			return false;
 		}
 
 		return ($table_exists == $table_name);
 	} catch (Exception $e) {
-		error_log('P404 Plugin: Exception in create_redirects_table - ' . $e->getMessage());
+		error_log('Detour: Exception in create_redirects_table - ' . $e->getMessage());
 		return false;
 	}
 }
@@ -211,7 +207,7 @@ function p404_handle_database_upgrade_secure()
 		$table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table_name));
 
 		if ($wpdb->last_error) {
-			error_log('P404 Plugin: Database error checking table - ' . $wpdb->last_error);
+			error_log('Detour: Database error checking table - ' . $wpdb->last_error);
 			return false;
 		}
 
@@ -232,7 +228,7 @@ function p404_handle_database_upgrade_secure()
 		return true; // Success
 
 	} catch (Exception $e) {
-		error_log("P404 Plugin: Database upgrade exception - " . $e->getMessage());
+		error_log("Detour: Database upgrade exception - " . $e->getMessage());
 		return false;
 	}
 }
@@ -248,12 +244,12 @@ function p404_alter_existing_table_secure($table_name)
 		$columns = $wpdb->get_results("DESCRIBE {$table_name}");
 
 		if ($wpdb->last_error) {
-			error_log("P404 Plugin: Failed to describe table structure - " . $wpdb->last_error);
+			error_log("Detour: Failed to describe table structure - " . $wpdb->last_error);
 			return false;
 		}
 
 		if ($columns === false || empty($columns)) {
-			error_log("P404 Plugin: Unable to get table structure");
+			error_log("Detour: Unable to get table structure");
 			return false;
 		}
 
@@ -270,11 +266,9 @@ function p404_alter_existing_table_secure($table_name)
 			$result = $wpdb->query("ALTER TABLE {$table_name} ADD COLUMN ip_address VARCHAR(45) NULL AFTER url");
 
 			if ($result === false || $wpdb->last_error) {
-				error_log("P404 Plugin: Failed to add ip_address column - " . $wpdb->last_error);
+				error_log("Detour: Failed to add ip_address column - " . $wpdb->last_error);
 				return false;
 			}
-
-			error_log("P404 Plugin: Added ip_address column to existing table");
 			$changes_made = true;
 		}
 
@@ -284,11 +278,9 @@ function p404_alter_existing_table_secure($table_name)
 			$result = $wpdb->query("ALTER TABLE {$table_name} ADD COLUMN referrer TEXT NULL AFTER ip_address");
 
 			if ($result === false || $wpdb->last_error) {
-				error_log("P404 Plugin: Failed to add referrer column - " . $wpdb->last_error);
+				error_log("Detour: Failed to add referrer column - " . $wpdb->last_error);
 				return false;
 			}
-
-			error_log("P404 Plugin: Added referrer column to existing table");
 			$changes_made = true;
 		}
 
@@ -301,11 +293,9 @@ function p404_alter_existing_table_secure($table_name)
 			$wpdb->query("ALTER TABLE {$table_name} ADD INDEX idx_url_hash (url(191))");
 			$wpdb->suppress_errors(false);
 		}
-
-		error_log("P404 Plugin: Existing table altered successfully");
 		return true;
 	} catch (Exception $e) {
-		error_log("P404 Plugin: Error altering existing table - " . $e->getMessage());
+		error_log("Detour: Error altering existing table - " . $e->getMessage());
 		return false;
 	}
 }
@@ -330,20 +320,7 @@ function p404_migrate_options()
 	}
 }
 add_action('plugins_loaded', 'p404_migrate_options');
-
-
-function P404REDIRECT_HideMsg()
-{
-	add_option('P404REDIRECT_upgrade_msg', 'hidemsg');
-}
-
-function P404REDIRECT_HideAlert()
-{
-
-	update_option('P404_alert_msg', 'hidemsg');
-}
 add_action('admin_post_clear_redirects_log', 'clear_redirects_log_handler');
-
 function clear_redirects_log_handler()
 {
 	// Verify the nonce for security
@@ -365,51 +342,6 @@ function clear_redirects_log_handler()
 	// Redirect back to the 404 URLs tab with a success message
 	wp_redirect(admin_url('admin.php?page=detour.php&mytab=404urls'));
 	exit;
-}
-
-
-function P404REDIRECT_after_plugin_row($plugin_file, $plugin_data, $status)
-{
-	if (get_option('P404REDIRECT_upgrade_msg') != 'hidemsg') {
-		$class_name = isset($plugin_data['slug']) ? $plugin_data['slug'] : 'detour'; // $plugin_data is an array retrived by default when you action this function after_plugin_row
-
-		echo '<tr id="' . esc_attr($class_name) . '-plugin-update-tr" class="plugin-update-tr active">';
-		echo '<td  colspan="6" class="plugin-update">';
-		echo '<div id="' . esc_attr($class_name) . '-upgradeMsg" class="update-message" style="background:#FFF8E5; padding-left:10px; border-left:#FFB900 solid 4px" >';
-
-
-		echo '<span id="HideMe" style="cursor:pointer" ><a href="javascript:void(0)"><strong> Dismiss</strong></a> this message</span>';
-		echo '</div>';
-		echo '</td>';
-		echo '</tr>';
-	}
-	?>
-	<script type="text/javascript">
-		jQuery(document).ready(function() {
-			var row = jQuery('#<?php echo esc_attr($class_name); ?>-plugin-update-tr').closest('tr').prev();
-			jQuery(row).addClass('update');
-
-			jQuery("#HideMe").click(function() {
-				jQuery.ajax({
-					type: 'POST',
-					url: '<?php echo admin_url(); ?>/admin-ajax.php',
-					data: {
-						action: 'P404REDIRECT_HideMsg'
-					},
-					success: function(data, textStatus, XMLHttpRequest) {
-
-						jQuery("#<?php echo esc_attr($class_name); ?>-upgradeMsg").hide();
-
-					},
-					error: function(MLHttpRequest, textStatus, errorThrown) {
-						alert(errorThrown);
-					}
-				});
-			});
-
-		});
-	</script>
-<?php
 }
 
 function P404REDIRECT_get_current_URL()
@@ -457,7 +389,7 @@ function P404REDIRECT_get_current_URL()
 	}
 
 	if ( ! in_array($request_host_no_port, $allowed_hosts, true) ) {
-		error_log('P404 Plugin: Suspicious host detected - ' . $host);
+		error_log('Detour: Suspicious host detected - ' . $host);
 		return home_url(); // Security fallback
 	}
 
@@ -473,34 +405,12 @@ function P404REDIRECT_get_current_URL()
 
 	// Additional validation
 	if (strlen($uri) > 2000) { // URLs shouldn't be this long
-		error_log('P404 Plugin: Unusually long URI detected');
+		error_log('Detour: Unusually long URI detected');
 		return home_url();
 	}
 
 	return $protocol . $host . $uri;
 }
-
-//----------------------------------------------------
-function P404REDIRECT_migrate_existing_options()
-{
-	// Fetch the current options
-	$options = get_option(OPTIONS404, array());
-
-	// Add new options if they are missing
-	if (!isset($options['p404_logging_status'])) {
-		$options['p404_logging_status'] = '1'; // Default: enabled
-	}
-	if (!isset($options['p404_logging_expiration_date'])) {
-		$options['p404_logging_expiration_date'] = '1'; // Default: 1 month
-	}
-	if (!isset($options['p404_redirect_type'])) {
-		$options['p404_redirect_type'] = '301'; // Default: Permanent Redirect
-	}
-
-	// Save the updated options back to the database
-	update_option(OPTIONS404, $options);
-}
-
 function P404REDIRECT_init_my_options()
 {
 	add_option(OPTIONS404);
@@ -593,7 +503,7 @@ function P404REDIRECT_add_redirected_link($link)
 		);
 
 		if ($wpdb->last_error) {
-			error_log('P404 Plugin: Database error checking recent entry - ' . $wpdb->last_error);
+			error_log('Detour: Database error checking recent entry - ' . $wpdb->last_error);
 			return false;
 		}
 
@@ -612,7 +522,7 @@ function P404REDIRECT_add_redirected_link($link)
 			);
 
 			if ($wpdb->last_error) {
-				error_log('P404 Plugin: Database error updating redirect count - ' . $wpdb->last_error);
+				error_log('Detour: Database error updating redirect count - ' . $wpdb->last_error);
 				return false;
 			}
 		} else {
@@ -631,14 +541,14 @@ function P404REDIRECT_add_redirected_link($link)
 			);
 
 			if ($wpdb->last_error) {
-				error_log('P404 Plugin: Database error inserting new redirect - ' . $wpdb->last_error);
+				error_log('Detour: Database error inserting new redirect - ' . $wpdb->last_error);
 				return false;
 			}
 		}
 
 		return true;
 	} catch (Exception $e) {
-		error_log('P404 Plugin: Exception in add_redirected_link - ' . $e->getMessage());
+		error_log('Detour: Exception in add_redirected_link - ' . $e->getMessage());
 		return false;
 	}
 }
@@ -803,8 +713,6 @@ function p404_setup_email_notifications()
 		} elseif ($frequency == 'monthly' && !wp_next_scheduled('p404_monthly_email_summary')) {
 			wp_schedule_event($next_run_time, 'monthly', 'p404_monthly_email_summary');
 		}
-
-		// Log scheduling
 	} else {
 		// Clear any existing schedules if notifications are disabled
 		p404_clear_email_schedules();
@@ -866,7 +774,6 @@ function p404_send_email_summary($period)
 	// Check if notifications are still enabled
 	$email_enabled = P404REDIRECT_read_option_value('email_notifications_enabled', '2');
 	if ($email_enabled != '1') {
-		error_log("P404 Plugin: Email notifications disabled, skipping {$period} email");
 		return;
 	}
 
@@ -881,7 +788,6 @@ function p404_send_email_summary($period)
 
 		// If email was sent within last hour, skip
 		if ($time_diff < 3600) { // 3600 seconds = 1 hour
-			error_log("P404 Plugin: {$period} email already sent recently (" . round($time_diff / 60) . " minutes ago), skipping");
 			return;
 		}
 	}
@@ -893,7 +799,6 @@ function p404_send_email_summary($period)
 
 	// Only send email if there are 404 errors
 	if ($stats['total_errors'] == 0) {
-		error_log("P404 Plugin: No 404 errors found for {$period} period, skipping email");
 		return;
 	}
 
@@ -915,11 +820,9 @@ function p404_send_email_summary($period)
 	$sent = wp_mail($notification_email, $subject, $message, $headers);
 
 	if ($sent) {
-		// Log successful email send
-		error_log("P404 Plugin: {$period} email summary sent successfully to {$notification_email}");
 	} else {
 		// Log failed email send and reset the timestamp
-		error_log("P404 Plugin: Failed to send {$period} email summary to {$notification_email}");
+		error_log("Detour: Failed to send {$period} email summary to {$notification_email}");
 		// Reset the timestamp since email failed
 		P404REDIRECT_save_option_value($last_sent_key, $last_sent);
 	}
@@ -1421,43 +1324,7 @@ function p404_cleanup_email_schedules()
 function p404_update_email_schedules()
 {
 	p404_setup_email_notifications();
-}
-function p404_send_test_email()
-{
-	if (!current_user_can('manage_options')) {
-		return false;
-	}
-
-	// Temporarily bypass duplicate protection for test
-	$stats = p404_get_period_statistics('weekly');
-	if ($stats['total_errors'] == 0) {
-		// Create fake stats for testing
-		$stats['total_errors'] = 1;
-		$stats['unique_urls'] = 1;
-		$stats['unique_ips'] = 1;
-		$stats['top_urls'] = array(array('url' => 'https://example.com/test', 'hits' => 1));
-	}
-
-	$subject = "TEST: " . p404_get_email_subject('weekly', $stats['total_errors']);
-	$message = p404_generate_email_content('weekly', $stats);
-
-	$admin_email = get_option('admin_email');
-	$headers = array(
-		'Content-Type: text/html; charset=UTF-8',
-		'From: ' . get_bloginfo('name') . ' <' . $admin_email . '>'
-	);
-
-	$sent = wp_mail($admin_email, $subject, $message, $headers);
-
-	if ($sent) {
-		error_log("P404 Plugin: Test email sent successfully to {$admin_email}");
-	} else {
-		error_log("P404 Plugin: Failed to send test email to {$admin_email}");
-	}
-
-	return $sent;
-}
-add_action('wp_ajax_delete_previous_404_image', 'handle_delete_previous_404_image');
+}add_action('wp_ajax_delete_previous_404_image', 'handle_delete_previous_404_image');
 
 function handle_delete_previous_404_image()
 {
@@ -1621,11 +1488,8 @@ function p404_generate_test_email_stats()
 		);
 	}
 
-	// Get top referrers (if referrer column exists)
-	$referrer_column_exists = $wpdb->get_var("SHOW COLUMNS FROM {$table_name} LIKE 'referrer'");
 	$top_referrers = array();
-
-	if ($referrer_column_exists) {
+	{
 		$referrer_data = $wpdb->get_results($wpdb->prepare("
             SELECT 
                 CASE 
@@ -1652,13 +1516,6 @@ function p404_generate_test_email_stats()
 				'unique_visitors' => intval($ref['unique_visitors'])
 			);
 		}
-	} else {
-		// Fallback referrers for demo
-		$top_referrers = array(
-			array('referrer_domain' => 'Google Search', 'hits' => max(1, intval($current_period_errors * 0.4)), 'unique_visitors' => max(1, intval($unique_ips * 0.6))),
-			array('referrer_domain' => 'Direct Access', 'hits' => max(1, intval($current_period_errors * 0.3)), 'unique_visitors' => max(1, intval($unique_ips * 0.4))),
-			array('referrer_domain' => 'Other Sites', 'hits' => max(1, intval($current_period_errors * 0.2)), 'unique_visitors' => max(1, intval($unique_ips * 0.3)))
-		);
 	}
 
 	// Get daily trend for the past 7 days
@@ -1717,76 +1574,4 @@ function p404_generate_test_email_stats()
 		'start_date' => $start_date,
 		'end_date' => $end_date
 	);
-}
-
-
-
-// Function to schedule or send regular email reports (for future implementation)
-function p404_schedule_email_reports()
-{
-	// This function can be used to set up WordPress cron jobs for automated emails
-	$email_enabled = P404REDIRECT_read_option_value('email_notifications_enabled', '2');
-	$email_frequency = P404REDIRECT_read_option_value('email_frequency', 'weekly');
-
-	if ($email_enabled == '1') {
-		// Schedule based on frequency
-		if (!wp_next_scheduled('p404_send_scheduled_email')) {
-			switch ($email_frequency) {
-				case 'daily':
-					wp_schedule_event(strtotime('tomorrow 9:00 AM'), 'daily', 'p404_send_scheduled_email');
-					break;
-				case 'weekly':
-					wp_schedule_event(strtotime('next monday 9:00 AM'), 'weekly', 'p404_send_scheduled_email');
-					break;
-				case 'monthly':
-					wp_schedule_event(strtotime('first day of next month 9:00 AM'), 'monthly', 'p404_send_scheduled_email');
-					break;
-			}
-		}
-	} else {
-		// Unschedule if disabled
-		wp_clear_scheduled_hook('p404_send_scheduled_email');
-	}
-}
-
-// Hook for scheduled emails (add this to your main plugin file)
-add_action('p404_send_scheduled_email', 'p404_send_automatic_email_report');
-
-function p404_send_automatic_email_report()
-{
-	$email_enabled = P404REDIRECT_read_option_value('email_notifications_enabled', '2');
-	if ($email_enabled != '1') return;
-
-	$notification_email = P404REDIRECT_read_option_value('notification_email', get_option('admin_email'));
-	$email_frequency = P404REDIRECT_read_option_value('email_frequency', 'weekly');
-
-	// Generate stats based on frequency
-	$stats = p404_generate_email_stats_for_period($email_frequency);
-
-	// Only send if there are errors to report
-	if ($stats['total_errors'] > 0) {
-		$email_content = p404_generate_email_content($email_frequency, $stats);
-		$subject = p404_get_email_subject($email_frequency, $stats['total_errors']);
-
-		add_filter('wp_mail_content_type', 'p404_set_html_content_type');
-		wp_mail($notification_email, $subject, $email_content);
-		remove_filter('wp_mail_content_type', 'p404_set_html_content_type');
-	}
-}
-
-function p404_generate_email_stats_for_period($period)
-{
-	// Similar to p404_generate_test_email_stats but with different date ranges based on period
-	// Implementation would be similar but with dynamic date ranges
-	switch ($period) {
-		case 'daily':
-			return p404_generate_test_email_stats(); // Use current implementation
-		case 'weekly':
-			return p404_generate_test_email_stats(); // Use current implementation  
-		case 'monthly':
-			// Implement monthly stats (30 days)
-			return p404_generate_test_email_stats(); // For now, use current
-		default:
-			return p404_generate_test_email_stats();
-	}
 }

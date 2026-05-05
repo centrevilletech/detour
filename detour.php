@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Detour
  * Plugin URI:  https://github.com/centrevilletech/detour
- * Description: Catch every 404 and route lost visitors to a destination that converts. Sortable hit history, weekly email digests, and an indexed schema engineered for high-traffic sites that stays fast past a million logged events.
- * Version:     1.0.0
+ * Description: Catch every 404 and route lost visitors to a destination that converts. Per-URL redirect rules with 301/302/307/308/410 support, sortable hit history, weekly email digests, and an indexed schema engineered for high-traffic sites.
+ * Version:     1.1.0
  * Author:      Centreville Tech LLC
  * Author URI:  https://centrevilletech.com
  * License:     GPL-2.0-or-later
@@ -26,13 +26,12 @@ add_action('plugins_loaded', 'p404_check_and_upgrade_database');
 add_action('plugins_loaded', 'centct_p404_ensure_schema');
 
 require_once('centct-fixes.php');
+require_once('centct-rules.php');
 require_once('functions.php');
 add_action('admin_menu', 'p404_admin_menu');
 add_action('admin_head', 'p404_header_code');
 add_action('wp', 'p404_redirect');
 add_action('admin_enqueue_scripts', 'p404_enqueue_styles_scripts');
-add_action('wp_ajax_P404REDIRECT_HideMsg', 'P404REDIRECT_HideMsg');
-add_action('wp_ajax_P404REDIRECT_HideAlert', 'P404REDIRECT_HideAlert');
 
 add_action('admin_bar_menu', 'p404_free_add_items',  40);
 add_action('wp_enqueue_scripts', 'p404_redirect_top_bar_enqueue_style');
@@ -369,42 +368,45 @@ add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'P404REDIRECT__fi
 
 function p404_redirect()
 {
-    if (is_404()) {
-        $options = P404REDIRECT_get_my_options();
-        $link = P404REDIRECT_get_current_URL();
+    if (!is_404()) {
+        return;
+    }
 
-        // Prevent infinite redirection loops
-        if ($link == $options['p404_redirect_to']) {
-            echo "<b>Detour</b> detected that the redirect target equals the requested URL. This would create an infinite loop. Please update the target URL in the plugin settings.";
-            exit();
-        }
+    $options = P404REDIRECT_get_my_options();
+    $link    = P404REDIRECT_get_current_URL();
 
-        // Check if redirection is enabled and a target URL is set
-        if ($options['p404_status'] == '1' && $options['p404_redirect_to'] != '') {
-
-            // Fetch the redirection type (default to 301)
-            $redirect_type = isset($options['p404_redirect_type']) ? intval($options['p404_redirect_type']) : 301;
-
-            // Check if this is a media link and media exclusion is enabled
-            $is_media_link = (isset($link) && strpos($link, '/wp-content') !== false);
-            $exclude_media = (isset($options['p404_execlude_media']) && $options['p404_execlude_media'] == '1');
-
-            if ($exclude_media && $is_media_link) {
-                // Media links: exclude from logging but still redirect
-                header("HTTP/1.1 $redirect_type " . ($redirect_type == 301 ? "Moved Permanently" : "Found"));
-                header("Location: " . $options['p404_redirect_to']);
-                exit();
-            } else {
-                // Regular 404s: Log the redirect with IP and referrer data
-                P404REDIRECT_add_redirected_link($link);
-
-                // Perform the redirect with the specified type
-                header("HTTP/1.1 $redirect_type " . ($redirect_type == 301 ? "Moved Permanently" : "Found"));
-                header("Location: " . $options['p404_redirect_to']);
-                exit();
-            }
+    // Per-URL rules win over the global default. A rule may apply 410 Gone
+    // (no Location header) or any of 301/302/307/308.
+    if (function_exists('centct_p404_match_rule')) {
+        $rule = centct_p404_match_rule($link);
+        if ($rule) {
+            P404REDIRECT_add_redirected_link($link);
+            centct_p404_apply_rule($rule, $link);
+            // apply_rule exits on success; if it returned, the rule was
+            // misconfigured (e.g. empty destination) and we fall through.
         }
     }
+
+    // Prevent infinite redirection loops on the global default.
+    if ($link == $options['p404_redirect_to']) {
+        echo "<b>Detour</b> detected that the redirect target equals the requested URL. This would create an infinite loop. Please update the target URL in the plugin settings.";
+        exit();
+    }
+
+    if ($options['p404_status'] != '1' || $options['p404_redirect_to'] == '') {
+        return;
+    }
+
+    $redirect_type = isset($options['p404_redirect_type']) ? intval($options['p404_redirect_type']) : 301;
+    $is_media_link = (strpos($link, '/wp-content') !== false);
+    $exclude_media = (isset($options['p404_execlude_media']) && $options['p404_execlude_media'] == '1');
+
+    if (!$exclude_media || !$is_media_link) {
+        P404REDIRECT_add_redirected_link($link);
+    }
+
+    wp_redirect($options['p404_redirect_to'], $redirect_type);
+    exit();
 }
 
 //---------------------------------------------------------------
@@ -423,27 +425,23 @@ function p404_get_site_404_page_path()
 
 function p404_check_default_permalink()
 {
-    $file = get_home_path() . "/.htaccess";
-    $content = "ErrorDocument 404 " . p404_get_site_404_page_path();
-    $marker_name = "FRedirect_ErrorDocument";
-    $filestr = "";
+    // Only verify once per day - this previously ran on every admin pageview,
+    // re-reading .htaccess each time. The transient bust below cheaply caps it.
+    if (get_transient('centct_p404_htaccess_verified')) {
+        return;
+    }
+    set_transient('centct_p404_htaccess_verified', 1, DAY_IN_SECONDS);
 
-    if (file_exists($file)) {
-        $f = @fopen($file, 'r+');
-        if ($f !== false && filesize($file) !== 0) {
-            $filestr = @fread($f, filesize($file));
-            if (strpos($filestr, $marker_name) === false) {
-                insert_with_markers($file, $marker_name, $content);
-            }
-            @fclose($f);
-        }
-    } else {
-        insert_with_markers($file, $marker_name, $content);
+    $file = get_home_path() . "/.htaccess";
+    if (!file_exists($file)) {
+        insert_with_markers($file, 'FRedirect_ErrorDocument', 'ErrorDocument 404 ' . p404_get_site_404_page_path());
+        return;
+    }
+    $contents = @file_get_contents($file);
+    if ($contents !== false && strpos($contents, 'FRedirect_ErrorDocument') === false) {
+        insert_with_markers($file, 'FRedirect_ErrorDocument', 'ErrorDocument 404 ' . p404_get_site_404_page_path());
     }
 }
-
-
-
 
 
 //---------------------------------------------------------------
@@ -462,34 +460,19 @@ function p404_enqueue_styles_scripts()
         wp_enqueue_style('main-404-css', $css);
     }
 }
-add_action('admin_enqueue_scripts', 'p404_enqueue_styles_scripts');
-
-
-
-//---------------------------------------------------------------
 
 function p404_admin_menu()
 {
     add_options_page('Detour', 'Detour', 'manage_options', basename(__FILE__), 'p404_options_menu');
 }
 
-//---------------------------------------------------------------
 function p404_options_menu()
 {
-
     if (!current_user_can('manage_options')) {
         wp_die(__('You do not have sufficient permissions to access this page.'));
     }
-
     include "option_page.php";
 }
-
-//---------------------------------------------------------------
-$path = plugin_basename(__FILE__);
-add_action("after_plugin_row_{$path}", 'P404REDIRECT_after_plugin_row', 10, 3);
-
-
-
 
 add_action('admin_enqueue_scripts', 'p404_include_js');
 

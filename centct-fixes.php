@@ -16,6 +16,12 @@ const CENTCT_P404_SCHEMA_OPTION  = 'centct_p404_schema_version';
  * and that the duplicate idx_url_hash prefix index is removed.
  */
 function centct_p404_ensure_schema() {
+    // Always check the rules table - it owns its own schema-version option
+    // and short-circuits cheaply when already at the current version.
+    if ( function_exists( 'centct_p404_create_rules_table' ) ) {
+        centct_p404_create_rules_table();
+    }
+
     if ( get_option( CENTCT_P404_SCHEMA_OPTION ) === CENTCT_P404_SCHEMA_VERSION ) {
         return;
     }

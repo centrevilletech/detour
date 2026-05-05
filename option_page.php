@@ -214,6 +214,9 @@ $notification_email = P404REDIRECT_read_option_value('notification_email', get_o
         <a href="?page=detour.php&mytab=options" class="nav-tab <?php if ($mytab == 'options') echo 'nav-tab-active'; ?>">
             <span class="dashicons dashicons-admin-settings"></span> Options
         </a>
+        <a href="?page=detour.php&mytab=rules" class="nav-tab <?php if ($mytab == 'rules') echo 'nav-tab-active'; ?>">
+            <span class="dashicons dashicons-randomize"></span> Rules
+        </a>
         <a href="?page=detour.php&mytab=404urls" class="nav-tab <?php if ($mytab == '404urls') echo 'nav-tab-active'; ?>">
             <span class="dashicons dashicons-list-view"></span> 404 URLs
         </a>
@@ -689,7 +692,12 @@ $notification_email = P404REDIRECT_read_option_value('notification_email', get_o
                             </tr>
                             <?php } else {
                             $start_number = ($current_page - 1) * $per_page;
-                            foreach ($latest_redirects as $index => $redirect) { ?>
+                            foreach ($latest_redirects as $index => $redirect) {
+                                $promote_href = esc_url(add_query_arg(
+                                    array('mytab' => 'rules', 'promote' => rawurlencode($redirect['url'])),
+                                    admin_url('admin.php?page=detour.php')
+                                ));
+                            ?>
                                 <tr>
                                     <td style="font-weight: 500; color: #6b7280;"><?php echo (int) $start_number + $index + 1; ?></td>
                                     <td style="font-size: 13px; color: #4b5563;"><?php echo esc_html($redirect['last_redirected']); ?></td>
@@ -697,6 +705,7 @@ $notification_email = P404REDIRECT_read_option_value('notification_email', get_o
                                         <a target="_blank" href="<?php echo esc_url($redirect['url']); ?>" style="color: #2563eb; text-decoration: none; word-break: break-all;">
                                             <?php echo esc_url($redirect['url']); ?>
                                         </a>
+                                        <a href="<?php echo $promote_href; ?>" class="button button-small" style="margin-left:8px;font-size:11px;">+ Make rule</a>
                                     </td>
                                     <td class="Number">
                                         <span class="badge">
@@ -786,8 +795,9 @@ $notification_email = P404REDIRECT_read_option_value('notification_email', get_o
 
         <?php } ?>
 
-        <div class="promotional-section">
-        </div>
+        <?php if ($mytab == "rules") {
+            centct_p404_render_rules_tab();
+        } ?>
     </div>
 </div>
 
