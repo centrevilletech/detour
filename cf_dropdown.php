@@ -1,7 +1,7 @@
 <?php
 if (! defined('ABSPATH')) exit; // Exit if accessed directly
-if (!class_exists('p404redirect_dropdown')) {
-	class p404redirect_dropdown
+if (!class_exists('Detour_Dropdown')) {
+	class Detour_Dropdown
 	{
 
 		private $name = 'drop';

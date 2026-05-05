@@ -8,21 +8,21 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-const CENTCT_P404_SCHEMA_VERSION = '1';
-const CENTCT_P404_SCHEMA_OPTION  = 'centct_p404_schema_version';
+const DETOUR_SCHEMA_VERSION = '1';
+const DETOUR_SCHEMA_OPTION  = 'centct_p404_schema_version';
 
 /**
  * Ensure the 404 log table has: real BINARY(16) url_hash key, count index,
  * and that the duplicate idx_url_hash prefix index is removed.
  */
-function centct_p404_ensure_schema() {
+function detour_ensure_schema() {
     // Always check the rules table - it owns its own schema-version option
     // and short-circuits cheaply when already at the current version.
-    if ( function_exists( 'centct_p404_create_rules_table' ) ) {
-        centct_p404_create_rules_table();
+    if ( function_exists( 'detour_create_rules_table' ) ) {
+        detour_create_rules_table();
     }
 
-    if ( get_option( CENTCT_P404_SCHEMA_OPTION ) === CENTCT_P404_SCHEMA_VERSION ) {
+    if ( get_option( DETOUR_SCHEMA_OPTION ) === DETOUR_SCHEMA_VERSION ) {
         return;
     }
 
@@ -86,14 +86,40 @@ function centct_p404_ensure_schema() {
         $wpdb->query( "ALTER TABLE `{$table}` ADD KEY `idx_count` (`count`)" );
     }
 
-    update_option( CENTCT_P404_SCHEMA_OPTION, CENTCT_P404_SCHEMA_VERSION, false );
+    update_option( DETOUR_SCHEMA_OPTION, DETOUR_SCHEMA_VERSION, false );
 }
+
+/**
+ * One-time cleanup for sites upgrading from <= 1.1: cron hook names were
+ * renamed from p404_*_email_summary to detour_*_email_summary in 1.2, so any
+ * scheduled events under the legacy names need to be cleared. The email
+ * setup function will reschedule under the new names on the next options
+ * save (or on the next admin page load if email is enabled).
+ */
+function detour_migrate_legacy_cron() {
+	if ( get_option( 'detour_legacy_cron_migrated' ) === '1' ) {
+		return;
+	}
+	foreach ( array(
+		'p404_daily_email_summary',
+		'p404_weekly_email_summary',
+		'p404_monthly_email_summary',
+		'p404_send_scheduled_email',
+	) as $legacy_hook ) {
+		wp_clear_scheduled_hook( $legacy_hook );
+	}
+	if ( function_exists( 'detour_setup_email_notifications' ) ) {
+		detour_setup_email_notifications();
+	}
+	update_option( 'detour_legacy_cron_migrated', '1', false );
+}
+add_action( 'plugins_loaded', 'detour_migrate_legacy_cron', 20 );
 
 /**
  * Fast existence check for a recent (url, ip, referrer) row, using url_hash.
  * Returns the row object or null.
  */
-function centct_p404_find_recent_entry( $url, $ip_address, $referrer, $cutoff_datetime ) {
+function detour_find_recent_entry( $url, $ip_address, $referrer, $cutoff_datetime ) {
     global $wpdb;
     $table = $wpdb->prefix . 'redirects_404';
 

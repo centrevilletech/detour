@@ -9,10 +9,10 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-const CENTCT_RULES_TABLE_VERSION = '1';
-const CENTCT_RULES_CACHE_GROUP   = 'detour_rules';
+const DETOUR_RULES_VERSION = '1';
+const DETOUR_RULES_CACHE_GROUP   = 'detour_rules';
 
-function centct_p404_rules_table_name() {
+function detour_rules_table_name() {
 	global $wpdb;
 	return $wpdb->prefix . 'detour_rules';
 }
@@ -22,13 +22,13 @@ function centct_p404_rules_table_name() {
  * and once per page load via plugins_loaded; short-circuits cheaply
  * via the schema-version option once applied.
  */
-function centct_p404_create_rules_table() {
-	if ( get_option( 'centct_p404_rules_schema_version' ) === CENTCT_RULES_TABLE_VERSION ) {
+function detour_create_rules_table() {
+	if ( get_option( 'centct_p404_rules_schema_version' ) === DETOUR_RULES_VERSION ) {
 		return;
 	}
 
 	global $wpdb;
-	$table   = centct_p404_rules_table_name();
+	$table   = detour_rules_table_name();
 	$charset = $wpdb->get_charset_collate();
 
 	$exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
@@ -55,7 +55,7 @@ function centct_p404_create_rules_table() {
 		);
 	}
 
-	update_option( 'centct_p404_rules_schema_version', CENTCT_RULES_TABLE_VERSION, false );
+	update_option( 'centct_p404_rules_schema_version', DETOUR_RULES_VERSION, false );
 }
 
 // ============================================================
@@ -63,18 +63,18 @@ function centct_p404_create_rules_table() {
 // read repopulates fresh; no manual key invalidation needed.
 // ============================================================
 
-function centct_p404_rules_cache_version() {
-	$v = wp_cache_get( 'rules_cache_v', CENTCT_RULES_CACHE_GROUP );
+function detour_rules_cache_version() {
+	$v = wp_cache_get( 'rules_cache_v', DETOUR_RULES_CACHE_GROUP );
 	if ( $v === false ) {
 		$v = 1;
-		wp_cache_set( 'rules_cache_v', $v, CENTCT_RULES_CACHE_GROUP );
+		wp_cache_set( 'rules_cache_v', $v, DETOUR_RULES_CACHE_GROUP );
 	}
 	return (int) $v;
 }
 
-function centct_p404_rules_bump_cache() {
-	$v = centct_p404_rules_cache_version() + 1;
-	wp_cache_set( 'rules_cache_v', $v, CENTCT_RULES_CACHE_GROUP );
+function detour_rules_bump_cache() {
+	$v = detour_rules_cache_version() + 1;
+	wp_cache_set( 'rules_cache_v', $v, DETOUR_RULES_CACHE_GROUP );
 }
 
 // ============================================================
@@ -85,9 +85,9 @@ function centct_p404_rules_bump_cache() {
  * Try to find a rule matching the given URL. Returns the rule row
  * (associative array) or null. Match priority: exact → longest prefix → regex.
  */
-function centct_p404_match_rule( $url ) {
+function detour_match_rule( $url ) {
 	global $wpdb;
-	$table = centct_p404_rules_table_name();
+	$table = detour_rules_table_name();
 
 	// 1. Exact match by hash key (single-row indexed lookup).
 	$rule = $wpdb->get_row(
@@ -107,8 +107,8 @@ function centct_p404_match_rule( $url ) {
 	}
 
 	// 2. Prefix match - longest-pattern wins.
-	$v            = centct_p404_rules_cache_version();
-	$prefix_rules = wp_cache_get( "prefix_rules_v{$v}", CENTCT_RULES_CACHE_GROUP );
+	$v            = detour_rules_cache_version();
+	$prefix_rules = wp_cache_get( "prefix_rules_v{$v}", DETOUR_RULES_CACHE_GROUP );
 	if ( $prefix_rules === false ) {
 		$prefix_rules = $wpdb->get_results(
 			"SELECT * FROM `{$table}`
@@ -116,7 +116,7 @@ function centct_p404_match_rule( $url ) {
 			 ORDER BY CHAR_LENGTH(source_pattern) DESC",
 			ARRAY_A
 		);
-		wp_cache_set( "prefix_rules_v{$v}", $prefix_rules, CENTCT_RULES_CACHE_GROUP, 300 );
+		wp_cache_set( "prefix_rules_v{$v}", $prefix_rules, DETOUR_RULES_CACHE_GROUP, 300 );
 	}
 	foreach ( $prefix_rules as $r ) {
 		if ( strpos( $url, $r['source_pattern'] ) === 0 ) {
@@ -125,7 +125,7 @@ function centct_p404_match_rule( $url ) {
 	}
 
 	// 3. Regex match - first match wins, evaluation order = id ASC.
-	$regex_rules = wp_cache_get( "regex_rules_v{$v}", CENTCT_RULES_CACHE_GROUP );
+	$regex_rules = wp_cache_get( "regex_rules_v{$v}", DETOUR_RULES_CACHE_GROUP );
 	if ( $regex_rules === false ) {
 		$regex_rules = $wpdb->get_results(
 			"SELECT * FROM `{$table}`
@@ -133,10 +133,10 @@ function centct_p404_match_rule( $url ) {
 			 ORDER BY id ASC",
 			ARRAY_A
 		);
-		wp_cache_set( "regex_rules_v{$v}", $regex_rules, CENTCT_RULES_CACHE_GROUP, 300 );
+		wp_cache_set( "regex_rules_v{$v}", $regex_rules, DETOUR_RULES_CACHE_GROUP, 300 );
 	}
 	foreach ( $regex_rules as $r ) {
-		$pattern = centct_p404_normalize_regex( $r['source_pattern'] );
+		$pattern = detour_normalize_regex( $r['source_pattern'] );
 		if ( @preg_match( $pattern, $url ) === 1 ) {
 			return $r;
 		}
@@ -149,7 +149,7 @@ function centct_p404_match_rule( $url ) {
  * Wrap a regex in `~...~` delimiters if the user did not supply any.
  * Strips line breaks defensively.
  */
-function centct_p404_normalize_regex( $pattern ) {
+function detour_normalize_regex( $pattern ) {
 	$pattern = (string) $pattern;
 	$pattern = str_replace( array( "\r", "\n" ), '', $pattern );
 	if ( $pattern === '' ) {
@@ -167,9 +167,9 @@ function centct_p404_normalize_regex( $pattern ) {
  * substitutes {path} for prefix-mode and emits a Location header. The
  * hit counter is updated best-effort; failures don't block the response.
  */
-function centct_p404_apply_rule( $rule, $url ) {
+function detour_apply_rule( $rule, $url ) {
 	global $wpdb;
-	$table = centct_p404_rules_table_name();
+	$table = detour_rules_table_name();
 
 	$wpdb->query(
 		$wpdb->prepare(
@@ -209,9 +209,9 @@ function centct_p404_apply_rule( $rule, $url ) {
 // CRUD helpers
 // ============================================================
 
-function centct_p404_get_rules( $args = array() ) {
+function detour_get_rules( $args = array() ) {
 	global $wpdb;
-	$table = centct_p404_rules_table_name();
+	$table = detour_rules_table_name();
 
 	$defaults = array(
 		'page'     => 1,
@@ -253,24 +253,24 @@ function centct_p404_get_rules( $args = array() ) {
 	);
 }
 
-function centct_p404_get_rule( $id ) {
+function detour_get_rule( $id ) {
 	global $wpdb;
-	$table = centct_p404_rules_table_name();
+	$table = detour_rules_table_name();
 	return $wpdb->get_row(
 		$wpdb->prepare( "SELECT * FROM `{$table}` WHERE id = %d", (int) $id ),
 		ARRAY_A
 	);
 }
 
-function centct_p404_create_rule( $data ) {
+function detour_create_rule( $data ) {
 	global $wpdb;
-	$clean = centct_p404_sanitize_rule_input( $data );
+	$clean = detour_sanitize_rule_input( $data );
 	if ( is_wp_error( $clean ) ) {
 		return $clean;
 	}
 
 	$ok = $wpdb->insert(
-		centct_p404_rules_table_name(),
+		detour_rules_table_name(),
 		array(
 			'match_type'      => $clean['match_type'],
 			'source_pattern'  => $clean['source_pattern'],
@@ -284,19 +284,19 @@ function centct_p404_create_rule( $data ) {
 	if ( ! $ok ) {
 		return new WP_Error( 'db_insert', $wpdb->last_error ?: 'Insert failed' );
 	}
-	centct_p404_rules_bump_cache();
+	detour_rules_bump_cache();
 	return (int) $wpdb->insert_id;
 }
 
-function centct_p404_update_rule( $id, $data ) {
+function detour_update_rule( $id, $data ) {
 	global $wpdb;
-	$clean = centct_p404_sanitize_rule_input( $data );
+	$clean = detour_sanitize_rule_input( $data );
 	if ( is_wp_error( $clean ) ) {
 		return $clean;
 	}
 
 	$ok = $wpdb->update(
-		centct_p404_rules_table_name(),
+		detour_rules_table_name(),
 		array(
 			'match_type'      => $clean['match_type'],
 			'source_pattern'  => $clean['source_pattern'],
@@ -312,33 +312,33 @@ function centct_p404_update_rule( $id, $data ) {
 	if ( $ok === false ) {
 		return new WP_Error( 'db_update', $wpdb->last_error ?: 'Update failed' );
 	}
-	centct_p404_rules_bump_cache();
+	detour_rules_bump_cache();
 	return true;
 }
 
-function centct_p404_delete_rule( $id ) {
+function detour_delete_rule( $id ) {
 	global $wpdb;
 	$ok = $wpdb->delete(
-		centct_p404_rules_table_name(),
+		detour_rules_table_name(),
 		array( 'id' => (int) $id ),
 		array( '%d' )
 	);
-	centct_p404_rules_bump_cache();
+	detour_rules_bump_cache();
 	return $ok !== false;
 }
 
-function centct_p404_toggle_rule( $id ) {
+function detour_toggle_rule( $id ) {
 	global $wpdb;
 	$wpdb->query(
 		$wpdb->prepare(
-			'UPDATE `' . centct_p404_rules_table_name() . '` SET is_active = 1 - is_active WHERE id = %d',
+			'UPDATE `' . detour_rules_table_name() . '` SET is_active = 1 - is_active WHERE id = %d',
 			(int) $id
 		)
 	);
-	centct_p404_rules_bump_cache();
+	detour_rules_bump_cache();
 }
 
-function centct_p404_sanitize_rule_input( $data ) {
+function detour_sanitize_rule_input( $data ) {
 	$allowed_match  = array( 'exact', 'prefix', 'regex' );
 	$allowed_status = array( 301, 302, 307, 308, 410 );
 
@@ -375,7 +375,7 @@ function centct_p404_sanitize_rule_input( $data ) {
 	}
 
 	if ( $match_type === 'regex' ) {
-		$pattern = centct_p404_normalize_regex( $source_pattern );
+		$pattern = detour_normalize_regex( $source_pattern );
 		if ( @preg_match( $pattern, '' ) === false ) {
 			return new WP_Error( 'invalid_regex', 'Invalid regular expression in source pattern.' );
 		}
@@ -394,13 +394,13 @@ function centct_p404_sanitize_rule_input( $data ) {
 // AJAX endpoints
 // ============================================================
 
-add_action( 'wp_ajax_centct_p404_save_rule',   'centct_p404_ajax_save_rule' );
-add_action( 'wp_ajax_centct_p404_delete_rule', 'centct_p404_ajax_delete_rule' );
-add_action( 'wp_ajax_centct_p404_toggle_rule', 'centct_p404_ajax_toggle_rule' );
-add_action( 'wp_ajax_centct_p404_get_rule',    'centct_p404_ajax_get_rule' );
+add_action( 'wp_ajax_centct_p404_save_rule',   'detour_ajax_save_rule' );
+add_action( 'wp_ajax_centct_p404_delete_rule', 'detour_ajax_delete_rule' );
+add_action( 'wp_ajax_centct_p404_toggle_rule', 'detour_ajax_toggle_rule' );
+add_action( 'wp_ajax_centct_p404_get_rule',    'detour_ajax_get_rule' );
 
-function centct_p404_ajax_check() {
-	if ( ! check_ajax_referer( 'centct_p404_rules', 'nonce', false ) ) {
+function detour_ajax_check() {
+	if ( ! check_ajax_referer( 'detour_rules', 'nonce', false ) ) {
 		wp_send_json_error( 'Bad nonce', 403 );
 	}
 	if ( ! current_user_can( 'manage_options' ) ) {
@@ -408,8 +408,8 @@ function centct_p404_ajax_check() {
 	}
 }
 
-function centct_p404_ajax_save_rule() {
-	centct_p404_ajax_check();
+function detour_ajax_save_rule() {
+	detour_ajax_check();
 	$id   = isset( $_POST['id'] ) ? (int) $_POST['id'] : 0;
 	$data = array(
 		'match_type'      => isset( $_POST['match_type'] )      ? wp_unslash( $_POST['match_type'] )      : 'exact',
@@ -420,33 +420,33 @@ function centct_p404_ajax_save_rule() {
 		'notes'           => isset( $_POST['notes'] )           ? wp_unslash( $_POST['notes'] )          : '',
 	);
 
-	$result = $id > 0 ? centct_p404_update_rule( $id, $data ) : centct_p404_create_rule( $data );
+	$result = $id > 0 ? detour_update_rule( $id, $data ) : detour_create_rule( $data );
 	if ( is_wp_error( $result ) ) {
 		wp_send_json_error( $result->get_error_message() );
 	}
 	wp_send_json_success( array( 'id' => is_int( $result ) ? $result : $id ) );
 }
 
-function centct_p404_ajax_delete_rule() {
-	centct_p404_ajax_check();
+function detour_ajax_delete_rule() {
+	detour_ajax_check();
 	$id = isset( $_POST['id'] ) ? (int) $_POST['id'] : 0;
 	if ( $id <= 0 ) wp_send_json_error( 'Bad id' );
-	if ( centct_p404_delete_rule( $id ) ) wp_send_json_success();
+	if ( detour_delete_rule( $id ) ) wp_send_json_success();
 	wp_send_json_error( 'Delete failed' );
 }
 
-function centct_p404_ajax_toggle_rule() {
-	centct_p404_ajax_check();
+function detour_ajax_toggle_rule() {
+	detour_ajax_check();
 	$id = isset( $_POST['id'] ) ? (int) $_POST['id'] : 0;
 	if ( $id <= 0 ) wp_send_json_error( 'Bad id' );
-	centct_p404_toggle_rule( $id );
+	detour_toggle_rule( $id );
 	wp_send_json_success();
 }
 
-function centct_p404_ajax_get_rule() {
-	centct_p404_ajax_check();
+function detour_ajax_get_rule() {
+	detour_ajax_check();
 	$id   = isset( $_POST['id'] ) ? (int) $_POST['id'] : 0;
-	$rule = centct_p404_get_rule( $id );
+	$rule = detour_get_rule( $id );
 	if ( ! $rule ) wp_send_json_error( 'Not found', 404 );
 	wp_send_json_success( $rule );
 }
@@ -455,7 +455,7 @@ function centct_p404_ajax_get_rule() {
 // Admin UI for the Rules tab
 // ============================================================
 
-function centct_p404_render_rules_tab() {
+function detour_render_rules_tab() {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
@@ -466,7 +466,7 @@ function centct_p404_render_rules_tab() {
 	$order        = isset( $_GET['order'] )   ? sanitize_text_field( $_GET['order'] )   : 'DESC';
 	$search       = isset( $_GET['s'] )       ? sanitize_text_field( $_GET['s'] )       : '';
 
-	$data = centct_p404_get_rules( array(
+	$data = detour_get_rules( array(
 		'page'     => $current_page,
 		'per_page' => $per_page,
 		'orderby'  => $orderby,
@@ -475,7 +475,7 @@ function centct_p404_render_rules_tab() {
 	) );
 
 	$promote_url = isset( $_GET['promote'] ) ? esc_url_raw( wp_unslash( $_GET['promote'] ) ) : '';
-	$nonce       = wp_create_nonce( 'centct_p404_rules' );
+	$nonce       = wp_create_nonce( 'detour_rules' );
 	?>
 	<div class="form-section centct-rules-section">
 		<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
@@ -642,7 +642,7 @@ function centct_p404_render_rules_tab() {
 
 		$('#centct-rule-save').on('click', function(){
 			var data = {
-				action: 'centct_p404_save_rule',
+				action: 'detour_save_rule',
 				nonce: nonce,
 				id: parseInt($('#centct-rule-id').val(), 10) || 0,
 				match_type: $('#centct-rule-match-type').val(),
@@ -665,7 +665,7 @@ function centct_p404_render_rules_tab() {
 
 		$(document).on('click', '.centct-edit', function(){
 			var id = $(this).closest('tr').data('rule-id');
-			$.post(ajaxurl, {action:'centct_p404_get_rule', nonce:nonce, id:id}).done(function(resp){
+			$.post(ajaxurl, {action:'detour_get_rule', nonce:nonce, id:id}).done(function(resp){
 				if (resp && resp.success) openModal(resp.data);
 			});
 		});
@@ -673,12 +673,12 @@ function centct_p404_render_rules_tab() {
 		$(document).on('click', '.centct-delete', function(){
 			if (!confirm('Delete this rule?')) return;
 			var id = $(this).closest('tr').data('rule-id');
-			$.post(ajaxurl, {action:'centct_p404_delete_rule', nonce:nonce, id:id}).done(function(){ location.reload(); });
+			$.post(ajaxurl, {action:'detour_delete_rule', nonce:nonce, id:id}).done(function(){ location.reload(); });
 		});
 
 		$(document).on('change', '.centct-toggle', function(){
 			var id = $(this).closest('tr').data('rule-id');
-			$.post(ajaxurl, {action:'centct_p404_toggle_rule', nonce:nonce, id:id});
+			$.post(ajaxurl, {action:'detour_toggle_rule', nonce:nonce, id:id});
 		});
 
 		if (promote) { openModal({source_pattern: promote, match_type: 'exact', redirect_status: 301}); }

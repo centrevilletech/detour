@@ -7,14 +7,14 @@
  */
 
 defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
-p404_Uninstall_clear_htaccess();
-function p404_Uninstall_clear_htaccess()
+detour_Uninstall_clear_htaccess();
+function detour_Uninstall_clear_htaccess()
 {
     $htaccess_file = wp_upload_dir(null, true, true).'/.htaccess';
 
-    p404_Uninstall_insert_with_markers_htaccess($htaccess_file, 'All_404_marker_comment_image', "");
+    detour_Uninstall_insert_with_markers_htaccess($htaccess_file, 'All_404_marker_comment_image', "");
 }
-function p404_Uninstall_insert_with_markers_htaccess( $filename, $marker, $insertion ) {
+function detour_Uninstall_insert_with_markers_htaccess( $filename, $marker, $insertion ) {
     if (!file_exists( $filename ) || is_writeable( $filename ) ) {
         if (!file_exists( $filename ) ) {
             $markerdata = '';

@@ -9,20 +9,20 @@ global $wpdb, $table_prefix;
 $redirect_to = (isset($_POST['redirect_to'])) ? sanitize_text_field($_POST['redirect_to']) : '';
 $nonce = isset($_REQUEST['_wpnonce']) ? sanitize_text_field($_REQUEST['_wpnonce']) : '';
 if (isset($_GET['page']) && $_GET['page'] == 'detour.php') {
-    p404_cleanup_image_options();
+    detour_cleanup_image_options();
 }
 if ($redirect_to !== '') {
     if (wp_verify_nonce($nonce, 'p404home_nounce')) {
-        P404REDIRECT_save_option_value('p404_execlude_media', sanitize_text_field($_POST['p404_execlude_media']));
-        P404REDIRECT_save_option_value('p404_redirect_to', $redirect_to);
-        P404REDIRECT_save_option_value('p404_status', sanitize_text_field($_POST['p404_status']));
-        P404REDIRECT_save_option_value('img_p404_status', sanitize_text_field($_POST['img_p404_status']));
-        P404REDIRECT_save_option_value('image_id_p404_redirect_to', sanitize_text_field($_POST['misha-img']));
-        P404REDIRECT_save_option_value('p404_redirect_type', sanitize_text_field($_POST['p404_redirect_type']));
-        P404REDIRECT_save_option_value('email_notifications_enabled', sanitize_text_field($_POST['email_notifications_enabled']));
-        P404REDIRECT_save_option_value('email_frequency', sanitize_text_field($_POST['email_frequency']));
-        P404REDIRECT_save_option_value('notification_email', sanitize_email($_POST['notification_email']));
-        p404_update_email_schedules();
+        Detour_save_option_value('p404_execlude_media', sanitize_text_field($_POST['p404_execlude_media']));
+        Detour_save_option_value('p404_redirect_to', $redirect_to);
+        Detour_save_option_value('p404_status', sanitize_text_field($_POST['p404_status']));
+        Detour_save_option_value('img_p404_status', sanitize_text_field($_POST['img_p404_status']));
+        Detour_save_option_value('image_id_p404_redirect_to', sanitize_text_field($_POST['misha-img']));
+        Detour_save_option_value('p404_redirect_type', sanitize_text_field($_POST['p404_redirect_type']));
+        Detour_save_option_value('email_notifications_enabled', sanitize_text_field($_POST['email_notifications_enabled']));
+        Detour_save_option_value('email_frequency', sanitize_text_field($_POST['email_frequency']));
+        Detour_save_option_value('notification_email', sanitize_email($_POST['notification_email']));
+        detour_update_email_schedules();
         if (isset($_POST['img_p404_status']) && $_POST['img_p404_status'] == 1) {
             if (isset($_POST['misha-img']) && $_POST['misha-img'] != '') {
                 // Validate that the uploaded image exists
@@ -30,7 +30,7 @@ if ($redirect_to !== '') {
                 $image_data = wp_get_attachment_image_src($image_id);
 
                 if ($image_data && !empty($image_data[0])) {
-                    $mod_file = p404_modify_htaccess();
+                    $mod_file = detour_modify_htaccess();
                     if ($mod_file['status']) {
                         // Show success modal
 ?>
@@ -71,7 +71,7 @@ if ($redirect_to !== '') {
             <?php
             }
         } else {
-            p404_clear_htaccess();
+            detour_clear_htaccess();
             // Show success modal
             ?>
             <script>
@@ -165,10 +165,10 @@ function get_column_sort_url($column, $current_order_by, $current_order_dir)
     return $sort_url;
 }
 
-$options = P404REDIRECT_get_my_options();
-function p404_cleanup_image_options()
+$options = Detour_get_my_options();
+function detour_cleanup_image_options()
 {
-    $options = P404REDIRECT_get_my_options();
+    $options = Detour_get_my_options();
     $image_id = isset($options['image_id_p404_redirect_to']) ? absint($options['image_id_p404_redirect_to']) : '';
 
     if ($image_id != '') {
@@ -187,16 +187,16 @@ function p404_cleanup_image_options()
 
 
 <?php
-if (P404REDIRECT_there_is_cache() != '') {
+if (Detour_there_is_cache() != '') {
     echo '<div class="notice notice-info">';
-    echo '<p><strong>Cache Plugin Detected:</strong> You have a cache plugin installed (<strong>' . P404REDIRECT_there_is_cache() . '</strong>). Please clear your cache after making changes for them to take effect immediately.</p>';
+    echo '<p><strong>Cache Plugin Detected:</strong> You have a cache plugin installed (<strong>' . Detour_there_is_cache() . '</strong>). Please clear your cache after making changes for them to take effect immediately.</p>';
     echo '</div>';
 }
 
 // Get the current email options (add defaults if they don't exist)
-$email_enabled = P404REDIRECT_read_option_value('email_notifications_enabled', '1'); // Default: enabled
-$email_frequency = P404REDIRECT_read_option_value('email_frequency', 'weekly'); // Default: Weekly
-$notification_email = P404REDIRECT_read_option_value('notification_email', get_option('admin_email')); // Default: Admin email
+$email_enabled = Detour_read_option_value('email_notifications_enabled', '1'); // Default: enabled
+$email_frequency = Detour_read_option_value('email_frequency', 'weekly'); // Default: Weekly
+$notification_email = Detour_read_option_value('notification_email', get_option('admin_email')); // Default: Admin email
 
 ?>
 
@@ -232,7 +232,7 @@ $notification_email = P404REDIRECT_read_option_value('notification_email', get_o
                             <label class="form-label">404 Redirection Status:</label>
                             <div class="form-control">
                                 <?php
-                                $drop = new p404redirect_dropdown('p404_status');
+                                $drop = new Detour_Dropdown('p404_status');
                                 $drop->add('Enabled', '1');
                                 $drop->add('Disabled', '2');
                                 $drop->dropdown_print();
@@ -256,7 +256,7 @@ $notification_email = P404REDIRECT_read_option_value('notification_email', get_o
                             <label class="form-label">Select Redirect Type:</label>
                             <div class="form-control">
                                 <?php
-                                $drop = new p404redirect_dropdown('p404_redirect_type');
+                                $drop = new Detour_Dropdown('p404_redirect_type');
                                 $drop->add('301 Permanent Redirect', '301');
                                 $drop->add('302 Temporary Redirect', '302');
                                 $drop->dropdown_print();
@@ -271,12 +271,12 @@ $notification_email = P404REDIRECT_read_option_value('notification_email', get_o
                             <label class="form-label">Prevent logging media links:</label>
                             <div class="form-control">
                                 <?php
-                                $drop = new p404redirect_dropdown('p404_execlude_media');
+                                $drop = new Detour_Dropdown('p404_execlude_media');
                                 $drop->add('Yes', '1');
                                 $drop->add('No', '2');
                                 $drop->dropdown_print();
-                                $p404_execlude_media_val = isset($options['p404_execlude_media']) ? $options['p404_execlude_media'] : '1';
-                                $drop->select($p404_execlude_media_val);
+                                $detour_execlude_media_val = isset($options['p404_execlude_media']) ? $options['p404_execlude_media'] : '1';
+                                $drop->select($detour_execlude_media_val);
                                 ?>
                                 <div class="help-text">Exclude media files (images, videos, etc.) from 404 logging to keep your database clean and efficient</div>
                             </div>
@@ -291,7 +291,7 @@ $notification_email = P404REDIRECT_read_option_value('notification_email', get_o
                             <label class="form-label">Image 404 Redirection Status:</label>
                             <div class="form-control">
                                 <?php
-                                $drop = new p404redirect_dropdown('img_p404_status');
+                                $drop = new Detour_Dropdown('img_p404_status');
                                 $drop->add('Enabled', '1');
                                 $drop->add('Disabled', '2');
                                 $drop->dropdown_print();
@@ -344,7 +344,7 @@ $notification_email = P404REDIRECT_read_option_value('notification_email', get_o
                 </div>
                 <?php
                 // Get total redirects count for test mail condition
-                $total_redirects = P404REDIRECT_read_option_value('links', 0);
+                $total_redirects = Detour_read_option_value('links', 0);
                 ?>
 
                 <div class="form-section">
@@ -354,7 +354,7 @@ $notification_email = P404REDIRECT_read_option_value('notification_email', get_o
                             <label class="form-label">Email Notifications:</label>
                             <div class="form-control">
                                 <?php
-                                $drop = new p404redirect_dropdown('email_notifications_enabled');
+                                $drop = new Detour_Dropdown('email_notifications_enabled');
                                 $drop->add('Enabled', '1');
                                 $drop->add('Disabled', '2');
                                 $drop->dropdown_print();
@@ -368,7 +368,7 @@ $notification_email = P404REDIRECT_read_option_value('notification_email', get_o
                             <label class="form-label">Email Frequency:</label>
                             <div class="form-control">
                                 <?php
-                                $drop = new p404redirect_dropdown('email_frequency');
+                                $drop = new Detour_Dropdown('email_frequency');
                                 $drop->add('Daily', 'daily');
                                 $drop->add('Weekly', 'weekly');
                                 $drop->add('Monthly', 'monthly');
@@ -544,7 +544,7 @@ $notification_email = P404REDIRECT_read_option_value('notification_email', get_o
 
             global $wpdb;
             $table_name = $wpdb->prefix . 'redirects_404';
-            $total_redirects = P404REDIRECT_read_option_value('links', 0);
+            $total_redirects = Detour_read_option_value('links', 0);
 
             // Get unique IPs count (last 30 days)
             $unique_ips = $wpdb->get_var($wpdb->prepare("
@@ -584,7 +584,7 @@ $notification_email = P404REDIRECT_read_option_value('notification_email', get_o
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                     <div>
                         <p style="margin: 0; color: #4b5563; font-size: 14px;">
-                            Plugin installed on: <strong style="color: #1f2937;"><?php echo esc_attr(P404REDIRECT_read_option_value('install_date', date("Y-m-d h:i a"))); ?></strong>
+                            Plugin installed on: <strong style="color: #1f2937;"><?php echo esc_attr(Detour_read_option_value('install_date', date("Y-m-d h:i a"))); ?></strong>
                         </p>
                     </div>
                     <button id="openModal" class="btn btn-danger">
@@ -796,7 +796,7 @@ $notification_email = P404REDIRECT_read_option_value('notification_email', get_o
         <?php } ?>
 
         <?php if ($mytab == "rules") {
-            centct_p404_render_rules_tab();
+            detour_render_rules_tab();
         } ?>
     </div>
 </div>

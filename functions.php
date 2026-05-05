@@ -12,7 +12,7 @@ function setup_redirects_table_and_migrate()
 	// Step 2: Migrate data from the old `redirected_links` option
 	migrate_redirected_links();
 }
-function p404_check_and_upgrade_database()
+function detour_check_and_upgrade_database()
 {
 	// Check if upgrade is needed
 	$email_update = get_option('P404_email_update', 0);
@@ -21,7 +21,7 @@ function p404_check_and_upgrade_database()
 	if ($email_update == 0) {
 
 		// Attempt the upgrade
-		$upgrade_success = p404_handle_database_upgrade_secure();
+		$upgrade_success = detour_handle_database_upgrade_secure();
 
 		// Only mark as completed if upgrade was successful
 		if ($upgrade_success) {
@@ -32,7 +32,7 @@ function p404_check_and_upgrade_database()
 		}
 	}
 }
-function p404_customizer_admin_inline_styles()
+function detour_customizer_admin_inline_styles()
 {
 	// Check if we are in the Customizer page
 	if (is_customize_preview()) {
@@ -46,7 +46,7 @@ function p404_customizer_admin_inline_styles()
 	<?php
 	}
 }
-add_action('customize_controls_print_styles', 'p404_customizer_admin_inline_styles');
+add_action('customize_controls_print_styles', 'detour_customizer_admin_inline_styles');
 
 // =============================================================================
 // P404 DATABASE UPGRADE SYSTEM USING P404_email_update OPTION
@@ -56,7 +56,7 @@ add_action('customize_controls_print_styles', 'p404_customizer_admin_inline_styl
 
 
 
-function p404_create_new_table_with_columns_secure($table_name)
+function detour_create_new_table_with_columns_secure($table_name)
 {
 	global $wpdb;
 
@@ -115,7 +115,7 @@ function create_redirects_table()
 
 		if ($email_update == 0) {
 			// Attempt the upgrade
-			$upgrade_success = p404_handle_database_upgrade_secure();
+			$upgrade_success = detour_handle_database_upgrade_secure();
 
 			if ($upgrade_success) {
 				update_option('P404_email_update', 1);
@@ -196,7 +196,7 @@ function migrate_redirected_links()
 	}
 }
 
-function p404_handle_database_upgrade_secure()
+function detour_handle_database_upgrade_secure()
 {
 	global $wpdb;
 	$table_name = $wpdb->prefix . 'redirects_404';
@@ -213,13 +213,13 @@ function p404_handle_database_upgrade_secure()
 
 		if ($table_exists == $table_name) {
 			// Table exists, alter the columns
-			$alter_success = p404_alter_existing_table_secure($table_name);
+			$alter_success = detour_alter_existing_table_secure($table_name);
 			if (!$alter_success) {
 				return false;
 			}
 		} else {
 			// Table doesn't exist, create new one with all columns
-			$create_success = p404_create_new_table_with_columns_secure($table_name);
+			$create_success = detour_create_new_table_with_columns_secure($table_name);
 			if (!$create_success) {
 				return false;
 			}
@@ -234,7 +234,7 @@ function p404_handle_database_upgrade_secure()
 }
 
 // FIXED: Enhanced table alteration with error handling
-function p404_alter_existing_table_secure($table_name)
+function detour_alter_existing_table_secure($table_name)
 {
 	global $wpdb;
 
@@ -299,27 +299,27 @@ function p404_alter_existing_table_secure($table_name)
 		return false;
 	}
 }
-function p404_migrate_options()
+function detour_migrate_options()
 {
 	// Check if migration is already completed
 	$migration_status = get_option('p404_migration_status2', '1'); // Default: 1 (not migrated)
 
 	if ($migration_status === '1') {
 		// Perform migration
-		$options = get_option(OPTIONS404, array());
+		$options = get_option(DETOUR_OPTIONS_GROUP, array());
 
 		if (!isset($options['p404_redirect_type'])) {
 			$options['p404_redirect_type'] = '301'; // Default: Permanent Redirect
 		}
 
 		// Save the updated options
-		update_option(OPTIONS404, $options);
+		update_option(DETOUR_OPTIONS_GROUP, $options);
 		setup_redirects_table_and_migrate();
 		// Update the migration status to `2` (migrated)
 		update_option('p404_migration_status2', '2');
 	}
 }
-add_action('plugins_loaded', 'p404_migrate_options');
+add_action('plugins_loaded', 'detour_migrate_options');
 add_action('admin_post_clear_redirects_log', 'clear_redirects_log_handler');
 function clear_redirects_log_handler()
 {
@@ -335,16 +335,16 @@ function clear_redirects_log_handler()
 	$wpdb->query("TRUNCATE TABLE $table_name");
 
 	// Reset the `links` count in options
-	$options = P404REDIRECT_get_my_options();
+	$options = Detour_get_my_options();
 	$options['links'] = 0;
-	P404REDIRECT_update_my_options($options);
+	Detour_update_my_options($options);
 
 	// Redirect back to the 404 URLs tab with a success message
 	wp_redirect(admin_url('admin.php?page=detour.php&mytab=404urls'));
 	exit;
 }
 
-function P404REDIRECT_get_current_URL()
+function Detour_get_current_URL()
 {
 	// Determine protocol securely
 	$protocol = 'http://';
@@ -411,9 +411,9 @@ function P404REDIRECT_get_current_URL()
 
 	return $protocol . $host . $uri;
 }
-function P404REDIRECT_init_my_options()
+function Detour_init_my_options()
 {
-	add_option(OPTIONS404);
+	add_option(DETOUR_OPTIONS_GROUP);
 
 	// Initialize default options
 	$options = array();
@@ -426,68 +426,68 @@ function P404REDIRECT_init_my_options()
 	$options['p404_redirect_type'] = '301';
 
 
-	update_option(OPTIONS404, $options);
+	update_option(DETOUR_OPTIONS_GROUP, $options);
 }
 
 //---------------------------------------------------- 
 
-function P404REDIRECT_update_my_options($options)
+function Detour_update_my_options($options)
 {
-	update_option(OPTIONS404, $options);
+	update_option(DETOUR_OPTIONS_GROUP, $options);
 }
 
 //---------------------------------------------------- 
 
-function P404REDIRECT_get_my_options()
+function Detour_get_my_options()
 {
-	$options = get_option(OPTIONS404);
+	$options = get_option(DETOUR_OPTIONS_GROUP);
 	if (!$options) {
-		P404REDIRECT_init_my_options();
-		$options = get_option(OPTIONS404);
+		Detour_init_my_options();
+		$options = get_option(DETOUR_OPTIONS_GROUP);
 	}
 	return $options;
 }
 
 /* read_option_value -------------------------------------------------  */
-function P404REDIRECT_read_option_value($key, $default = '')
+function Detour_read_option_value($key, $default = '')
 {
-	$options = P404REDIRECT_get_my_options();
+	$options = Detour_get_my_options();
 	if (array_key_exists($key, $options)) {
 		return $options[$key];
 	} else {
-		P404REDIRECT_save_option_value($key, $default);
+		Detour_save_option_value($key, $default);
 		return $default;
 	}
 }
 
 /* save_option_value -------------------------------------------------  */
-function P404REDIRECT_save_option_value($key, $value)
+function Detour_save_option_value($key, $value)
 {
-	$options = P404REDIRECT_get_my_options();
+	$options = Detour_get_my_options();
 	$options[$key] = $value;
-	P404REDIRECT_update_my_options($options);
+	Detour_update_my_options($options);
 }
 
 
-function P404REDIRECT_add_redirected_link($link)
+function Detour_add_redirected_link($link)
 {
 	global $wpdb;
 
 	try {
 		// Sanitize the URL
-		$link = P404REDIRECT_get_current_URL();
+		$link = Detour_get_current_URL();
 
 		if (empty($link) || $link === home_url()) {
 			return false; // Don't log homepage or empty URLs
 		}
 
 		// Increment the redirect count in options
-		$links = P404REDIRECT_read_option_value('links', 0);
-		P404REDIRECT_save_option_value('links', $links + 1);
+		$links = Detour_read_option_value('links', 0);
+		Detour_save_option_value('links', $links + 1);
 
 		// Get visitor information securely
-		$ip_address = p404_get_visitor_ip();
-		$referrer = p404_get_referrer();
+		$ip_address = detour_get_visitor_ip();
+		$referrer = detour_get_referrer();
 
 		// Define the table name
 		$table_name = $wpdb->prefix . 'redirects_404';
@@ -495,7 +495,7 @@ function P404REDIRECT_add_redirected_link($link)
 		// Check if the exact same URL, IP, and referrer combination exists recently (within 1 hour).
 		// CentCT fork: use BINARY(16) url_hash key for an indexed lookup instead of a 191-char prefix scan.
 		$wpdb->last_error = '';
-		$recent_entry = centct_p404_find_recent_entry(
+		$recent_entry = detour_find_recent_entry(
 			$link,
 			$ip_address,
 			$referrer,
@@ -553,7 +553,7 @@ function P404REDIRECT_add_redirected_link($link)
 	}
 }
 
-function p404_get_visitor_ip()
+function detour_get_visitor_ip()
 {
 	$ip_keys = array(
 		'HTTP_CF_CONNECTING_IP',     // Cloudflare
@@ -605,7 +605,7 @@ function p404_get_visitor_ip()
 }
 
 
-function p404_get_referrer()
+function detour_get_referrer()
 {
 	if (!isset($_SERVER['HTTP_REFERER']) || empty($_SERVER['HTTP_REFERER'])) {
 		return 'Direct Access';
@@ -642,33 +642,33 @@ function p404_get_referrer()
 }
 
 //---------------------------------------------------- 
-function P404REDIRECT_option_msg($msg)
+function Detour_option_msg($msg)
 {
 	echo '<div id="message" class="updated"><p>' . esc_attr($msg) . '</p></div>';
 }
 
 //---------------------------------------------------- 
-function P404REDIRECT_info_option_msg($msg)
+function Detour_info_option_msg($msg)
 {
 	echo '<div id="message" class="updated"><p><div class="info_icon"></div> ' . esc_attr($msg) . '</p></div>';
 }
 
 //---------------------------------------------------- 
-function P404REDIRECT_warning_option_msg($msg)
+function Detour_warning_option_msg($msg)
 {
 	echo '<div id="message" class="error"><p><div class="warning_icon"></div> ' . esc_attr($msg) . '</p></div>';
 }
 
 //---------------------------------------------------- 
 
-function P404REDIRECT_success_option_msg($msg)
+function Detour_success_option_msg($msg)
 {
 	echo '<div id="message" class="updated"><p><div class="success_icon"></div> ' . esc_attr($msg) . '</p></div>';
 }
 
 //---------------------------------------------------- 
 
-function P404REDIRECT_failure_option_msg($msg)
+function Detour_failure_option_msg($msg)
 {
 	echo '<div id="message" class="error"><p><div class="failure_icon"></div> ' . esc_attr($msg) . '</p></div>';
 }
@@ -676,7 +676,7 @@ function P404REDIRECT_failure_option_msg($msg)
 
 //----------------------------------------------------
 //** updated 2/2/2020
-function P404REDIRECT_there_is_cache()
+function Detour_there_is_cache()
 {
 	$plugins = get_site_option('active_plugins');
 	if (is_array($plugins)) {
@@ -691,34 +691,34 @@ function P404REDIRECT_there_is_cache()
 //-----------
 
 // Initialize email scheduling when plugin is activated
-function p404_setup_email_notifications()
+function detour_setup_email_notifications()
 {
 	// Check if email notifications are enabled
-	$email_enabled = P404REDIRECT_read_option_value('email_notifications_enabled', '2');
+	$email_enabled = Detour_read_option_value('email_notifications_enabled', '2');
 
 	if ($email_enabled == '1') {
-		$frequency = P404REDIRECT_read_option_value('email_frequency', 'weekly');
+		$frequency = Detour_read_option_value('email_frequency', 'weekly');
 
 		// Clear any existing schedules first
-		p404_clear_email_schedules();
+		detour_clear_email_schedules();
 
 		// Calculate next run time based on frequency (NOT immediate)
-		$next_run_time = p404_calculate_next_run_time($frequency);
+		$next_run_time = detour_calculate_next_run_time($frequency);
 
 		// Schedule the appropriate email based on frequency
-		if ($frequency == 'daily' && !wp_next_scheduled('p404_daily_email_summary')) {
-			wp_schedule_event($next_run_time, 'daily', 'p404_daily_email_summary');
-		} elseif ($frequency == 'weekly' && !wp_next_scheduled('p404_weekly_email_summary')) {
-			wp_schedule_event($next_run_time, 'weekly', 'p404_weekly_email_summary');
-		} elseif ($frequency == 'monthly' && !wp_next_scheduled('p404_monthly_email_summary')) {
-			wp_schedule_event($next_run_time, 'monthly', 'p404_monthly_email_summary');
+		if ($frequency == 'daily' && !wp_next_scheduled('detour_daily_email_summary')) {
+			wp_schedule_event($next_run_time, 'daily', 'detour_daily_email_summary');
+		} elseif ($frequency == 'weekly' && !wp_next_scheduled('detour_weekly_email_summary')) {
+			wp_schedule_event($next_run_time, 'weekly', 'detour_weekly_email_summary');
+		} elseif ($frequency == 'monthly' && !wp_next_scheduled('detour_monthly_email_summary')) {
+			wp_schedule_event($next_run_time, 'monthly', 'detour_monthly_email_summary');
 		}
 	} else {
 		// Clear any existing schedules if notifications are disabled
-		p404_clear_email_schedules();
+		detour_clear_email_schedules();
 	}
 }
-function p404_calculate_next_run_time($frequency)
+function detour_calculate_next_run_time($frequency)
 {
 	switch ($frequency) {
 		case 'daily':
@@ -741,45 +741,45 @@ function p404_calculate_next_run_time($frequency)
 	return $next_run;
 }
 
-function p404_clear_email_schedules()
+function detour_clear_email_schedules()
 {
-	wp_clear_scheduled_hook('p404_daily_email_summary');
-	wp_clear_scheduled_hook('p404_weekly_email_summary');
-	wp_clear_scheduled_hook('p404_monthly_email_summary');
+	wp_clear_scheduled_hook('detour_daily_email_summary');
+	wp_clear_scheduled_hook('detour_weekly_email_summary');
+	wp_clear_scheduled_hook('detour_monthly_email_summary');
 }
 
 // Hook the email functions
-add_action('p404_daily_email_summary', 'p404_send_daily_email');
-add_action('p404_weekly_email_summary', 'p404_send_weekly_email');
-add_action('p404_monthly_email_summary', 'p404_send_monthly_email');
+add_action('detour_daily_email_summary', 'detour_send_daily_email');
+add_action('detour_weekly_email_summary', 'detour_send_weekly_email');
+add_action('detour_monthly_email_summary', 'detour_send_monthly_email');
 
 // Email sending functions
-function p404_send_daily_email()
+function detour_send_daily_email()
 {
-	p404_send_email_summary('daily');
+	detour_send_email_summary('daily');
 }
 
-function p404_send_weekly_email()
+function detour_send_weekly_email()
 {
-	p404_send_email_summary('weekly');
+	detour_send_email_summary('weekly');
 }
 
-function p404_send_monthly_email()
+function detour_send_monthly_email()
 {
-	p404_send_email_summary('monthly');
+	detour_send_email_summary('monthly');
 }
 // Main email sending function
-function p404_send_email_summary($period)
+function detour_send_email_summary($period)
 {
 	// Check if notifications are still enabled
-	$email_enabled = P404REDIRECT_read_option_value('email_notifications_enabled', '2');
+	$email_enabled = Detour_read_option_value('email_notifications_enabled', '2');
 	if ($email_enabled != '1') {
 		return;
 	}
 
 	// Prevent duplicate emails within same hour
 	$last_sent_key = 'last_email_sent_' . $period;
-	$last_sent = P404REDIRECT_read_option_value($last_sent_key, '');
+	$last_sent = Detour_read_option_value($last_sent_key, '');
 
 	if (!empty($last_sent)) {
 		$last_sent_time = strtotime($last_sent);
@@ -792,10 +792,10 @@ function p404_send_email_summary($period)
 		}
 	}
 
-	$notification_email = P404REDIRECT_read_option_value('notification_email', get_option('admin_email'));
+	$notification_email = Detour_read_option_value('notification_email', get_option('admin_email'));
 
 	// Get comprehensive 404 statistics for the period
-	$stats = p404_get_period_statistics($period);
+	$stats = detour_get_period_statistics($period);
 
 	// Only send email if there are 404 errors
 	if ($stats['total_errors'] == 0) {
@@ -803,8 +803,8 @@ function p404_send_email_summary($period)
 	}
 
 	// Generate enhanced email content
-	$subject = p404_get_email_subject($period, $stats['total_errors']);
-	$message = p404_generate_email_content($period, $stats);
+	$subject = detour_get_email_subject($period, $stats['total_errors']);
+	$message = detour_generate_email_content($period, $stats);
 
 	// Enhanced email headers
 	$headers = array(
@@ -814,7 +814,7 @@ function p404_send_email_summary($period)
 	);
 
 	// Update last sent time BEFORE sending (to prevent race conditions)
-	P404REDIRECT_save_option_value($last_sent_key, current_time('mysql'));
+	Detour_save_option_value($last_sent_key, current_time('mysql'));
 
 	// Send email with error handling
 	$sent = wp_mail($notification_email, $subject, $message, $headers);
@@ -824,11 +824,11 @@ function p404_send_email_summary($period)
 		// Log failed email send and reset the timestamp
 		error_log("Detour: Failed to send {$period} email summary to {$notification_email}");
 		// Reset the timestamp since email failed
-		P404REDIRECT_save_option_value($last_sent_key, $last_sent);
+		Detour_save_option_value($last_sent_key, $last_sent);
 	}
 }
 // Get statistics for a specific period
-function p404_get_period_statistics($period)
+function detour_get_period_statistics($period)
 {
 	global $wpdb;
 	$table_name = $wpdb->prefix . 'redirects_404';
@@ -969,7 +969,7 @@ function p404_get_period_statistics($period)
 }
 
 // Generate email subject
-function p404_get_email_subject($period, $error_count)
+function detour_get_email_subject($period, $error_count)
 {
 	$site_name = get_bloginfo('name');
 	//$period_text = ucfirst(string: $period);
@@ -982,12 +982,12 @@ function p404_get_email_subject($period, $error_count)
 	return "404 Analytics Report - {$site_name} ({$period_text}: " . number_format($error_count) . " errors)";
 }
 // Generate email content
-function p404_generate_email_content($period, $stats)
+function detour_generate_email_content($period, $stats)
 {
 	$site_name = get_bloginfo('name');
 	//$period_text = ucfirst($period);
 	$period_text = isset($period) ? ucfirst($period) : 'Weekly';
-	$date_range = p404_format_date_range($period, $stats['start_date'], $stats['end_date']);
+	$date_range = detour_format_date_range($period, $stats['start_date'], $stats['end_date']);
 
 	ob_start();
 ?>
@@ -1291,7 +1291,7 @@ function p404_generate_email_content($period, $stats)
 }
 
 // Format date range for display
-function p404_format_date_range($period, $start_date, $end_date)
+function detour_format_date_range($period, $start_date, $end_date)
 {
 	if ($period == 'daily') {
 		return date('F j, Y', strtotime($start_date));
@@ -1301,8 +1301,8 @@ function p404_format_date_range($period, $start_date, $end_date)
 }
 
 // Add custom cron schedules
-add_filter('cron_schedules', 'p404_add_custom_cron_schedules');
-function p404_add_custom_cron_schedules($schedules)
+add_filter('cron_schedules', 'detour_add_custom_cron_schedules');
+function detour_add_custom_cron_schedules($schedules)
 {
 	$schedules['weekly'] = array(
 		'interval' => 604800, // 7 days
@@ -1316,14 +1316,14 @@ function p404_add_custom_cron_schedules($schedules)
 }
 
 /// Clean up scheduled events on plugin deactivation
-register_deactivation_hook(__FILE__, 'p404_cleanup_email_schedules');
-function p404_cleanup_email_schedules()
+register_deactivation_hook(__FILE__, 'detour_cleanup_email_schedules');
+function detour_cleanup_email_schedules()
 {
-	p404_clear_email_schedules();
+	detour_clear_email_schedules();
 }
-function p404_update_email_schedules()
+function detour_update_email_schedules()
 {
-	p404_setup_email_notifications();
+	detour_setup_email_notifications();
 }add_action('wp_ajax_delete_previous_404_image', 'handle_delete_previous_404_image');
 
 function handle_delete_previous_404_image()
@@ -1383,25 +1383,25 @@ function handle_send_test_404_email()
 	}
 
 	// Check if we have enough redirects
-	$total_redirects = P404REDIRECT_read_option_value('links', 0);
+	$total_redirects = Detour_read_option_value('links', 0);
 	if ($total_redirects < 5) {
 		wp_send_json_error('Not enough redirect data available. Need at least 5 redirects to send test email.');
 	}
 
 	try {
 		// Generate test email with actual data
-		$test_stats = p404_generate_test_email_stats();
-		$email_content = p404_generate_email_content('weekly', $test_stats);
-		$subject = p404_get_email_subject('weekly', $test_stats['total_errors']);
+		$test_stats = detour_generate_test_email_stats();
+		$email_content = detour_generate_email_content('weekly', $test_stats);
+		$subject = detour_get_email_subject('weekly', $test_stats['total_errors']);
 
 		// Set up HTML email
-		add_filter('wp_mail_content_type', 'p404_set_html_content_type');
+		add_filter('wp_mail_content_type', 'detour_set_html_content_type');
 
 		// Send the email
 		$sent = wp_mail($email, $subject, $email_content);
 
 		// Remove filter after sending
-		remove_filter('wp_mail_content_type', 'p404_set_html_content_type');
+		remove_filter('wp_mail_content_type', 'detour_set_html_content_type');
 
 		if ($sent) {
 			wp_send_json_success('Test email sent successfully to ' . $email);
@@ -1414,13 +1414,13 @@ function handle_send_test_404_email()
 }
 
 // Function to set HTML content type for emails
-function p404_set_html_content_type()
+function detour_set_html_content_type()
 {
 	return 'text/html';
 }
 
 // Function to generate test email statistics using real data
-function p404_generate_test_email_stats()
+function detour_generate_test_email_stats()
 {
 	global $wpdb;
 	$table_name = $wpdb->prefix . 'redirects_404';

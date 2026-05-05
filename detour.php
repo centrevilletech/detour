@@ -3,7 +3,7 @@
  * Plugin Name: Detour
  * Plugin URI:  https://github.com/centrevilletech/detour
  * Description: Catch every 404 and route lost visitors to a destination that converts. Per-URL redirect rules with 301/302/307/308/410 support, sortable hit history, weekly email digests, and an indexed schema engineered for high-traffic sites.
- * Version:     1.1.0
+ * Version:     1.2.0
  * Author:      Centreville Tech LLC
  * Author URI:  https://centrevilletech.com
  * License:     GPL-2.0-or-later
@@ -14,35 +14,35 @@
  * (https://wordpress.org/plugins/all-404-redirect-to-homepage/), released under
  * GPL-2.0-or-later. See README.md for the full attribution and a list of changes.
  */
-register_activation_hook(__FILE__, 'p404_modify_htaccess');
-register_activation_hook(__FILE__, 'centct_p404_ensure_schema');
-register_deactivation_hook(__FILE__, 'p404_clear_htaccess');
+register_activation_hook(__FILE__, 'detour_modify_htaccess');
+register_activation_hook(__FILE__, 'detour_ensure_schema');
+register_deactivation_hook(__FILE__, 'detour_clear_htaccess');
 
 if (! defined('ABSPATH')) exit;
 if (! defined('WP_CONTENT_DIR')) exit;
 
-define('OPTIONS404', 'options-404-redirect-group');
-add_action('plugins_loaded', 'p404_check_and_upgrade_database');
-add_action('plugins_loaded', 'centct_p404_ensure_schema');
+define('DETOUR_OPTIONS_GROUP', 'options-404-redirect-group');
+add_action('plugins_loaded', 'detour_check_and_upgrade_database');
+add_action('plugins_loaded', 'detour_ensure_schema');
 
-require_once('centct-fixes.php');
-require_once('centct-rules.php');
+require_once('detour-fixes.php');
+require_once('detour-rules.php');
 require_once('functions.php');
-add_action('admin_menu', 'p404_admin_menu');
-add_action('admin_head', 'p404_header_code');
-add_action('wp', 'p404_redirect');
-add_action('admin_enqueue_scripts', 'p404_enqueue_styles_scripts');
+add_action('admin_menu', 'detour_admin_menu');
+add_action('admin_head', 'detour_header_code');
+add_action('wp', 'detour_redirect');
+add_action('admin_enqueue_scripts', 'detour_enqueue_styles_scripts');
 
-add_action('admin_bar_menu', 'p404_free_add_items',  40);
-add_action('wp_enqueue_scripts', 'p404_redirect_top_bar_enqueue_style');
-add_action('admin_enqueue_scripts', 'p404_redirect_top_bar_enqueue_style');
+add_action('admin_bar_menu', 'detour_free_add_items',  40);
+add_action('wp_enqueue_scripts', 'detour_redirect_top_bar_enqueue_style');
+add_action('admin_enqueue_scripts', 'detour_redirect_top_bar_enqueue_style');
 
 
 
 
 
 // Number formatting function
-function p404_number_format($number)
+function detour_number_format($number)
 {
     if ($number >= 1000000) {
         return round($number / 1000000, 1) . 'M';
@@ -52,18 +52,18 @@ function p404_number_format($number)
     return number_format($number);
 }
 
-function p404_free_add_items($admin_bar)
+function detour_free_add_items($admin_bar)
 {
     if (!current_user_can('manage_options')) {
         return;
     }
 
     // Check if we have enough redirects to show stats
-    $links_count = P404REDIRECT_read_option_value('links', 0);
+    $links_count = Detour_read_option_value('links', 0);
     if ($links_count < 10) {
         // Keep original simple button
         $args = array(
-            'id'    => 'p404_free_top_button',
+            'id'    => 'detour_free_top_button',
             'parent' => null,
             'group'  => null,
             'title' => '<span class="ab-icon"></span>404 Stats',
@@ -77,7 +77,7 @@ function p404_free_add_items($admin_bar)
         return;
     }
 
-    $redirect_stats = p404_get_redirect_statistics();
+    $redirect_stats = detour_get_redirect_statistics();
 
     // Calculate percentage change from yesterday to today
     $today_count = $redirect_stats['today'];
@@ -127,7 +127,7 @@ function p404_free_add_items($admin_bar)
         $number_color = $change_color; // green if decreased, red if increased
     }
 
-    $today_card_content .= '<div style="color: ' . $number_color . '; font-size: 24px; font-weight: 700; line-height: 1;">' . p404_number_format($redirect_stats['today']) . '</div>';
+    $today_card_content .= '<div style="color: ' . $number_color . '; font-size: 24px; font-weight: 700; line-height: 1;">' . detour_number_format($redirect_stats['today']) . '</div>';
 
     if ($percentage_change) {
         $change_text = ($today_count < $yesterday_count) ? 'decreased' : 'increased';
@@ -150,21 +150,21 @@ function p404_free_add_items($admin_bar)
         // Yesterday card
         . '<div class="p404-redirect-card" style="background: #23282d; border-radius: 6px; padding: 15px; border: 1px solid #444;">'
         . '<div style="color: #aaa; font-size: 12px; font-weight: 500; margin-bottom: 4px;">' . __('Yesterday', 'detour') . '</div>'
-        . '<div style="color: #fff; font-size: 24px; font-weight: 700; line-height: 1;">' . p404_number_format($redirect_stats['yesterday']) . '</div>'
+        . '<div style="color: #fff; font-size: 24px; font-weight: 700; line-height: 1;">' . detour_number_format($redirect_stats['yesterday']) . '</div>'
         . '<div style="color: #666; font-size: 13px; margin-top: 4px;">' . __('redirects', 'detour') . '</div>'
         . '</div>'
 
         // This Month card
         . '<div class="p404-redirect-card" style="background: #23282d; border-radius: 6px; padding: 15px; border: 1px solid #444;">'
         . '<div style="color: #aaa; font-size: 12px; font-weight: 500; margin-bottom: 4px;">' . __('This Month', 'detour') . '</div>'
-        . '<div style="color: #fff; font-size: 24px; font-weight: 700; line-height: 1;">' . p404_number_format($redirect_stats['month']) . '</div>'
+        . '<div style="color: #fff; font-size: 24px; font-weight: 700; line-height: 1;">' . detour_number_format($redirect_stats['month']) . '</div>'
         . '<div style="color: #666; font-size: 13px; margin-top: 4px;">' . date('F Y') . '</div>'
         . '</div>'
 
         // Total card
         . '<div class="p404-redirect-card" style="background: #23282d; border-radius: 6px; padding: 15px; border: 1px solid #444;">'
         . '<div style="color: #aaa; font-size: 12px; font-weight: 500; margin-bottom: 4px;">' . __('Total', 'detour') . '</div>'
-        . '<div style="color: #fff; font-size: 24px; font-weight: 700; line-height: 1;">' . p404_number_format($redirect_stats['total']) . '</div>'
+        . '<div style="color: #fff; font-size: 24px; font-weight: 700; line-height: 1;">' . detour_number_format($redirect_stats['total']) . '</div>'
         . '<div style="color: #666; font-size: 13px; margin-top: 4px;">' . __('All Time', 'detour') . '</div>'
         . '</div>'
 
@@ -181,7 +181,7 @@ function p404_free_add_items($admin_bar)
     $menu_title = '<span class="ab-icon"></span> ' . __('404 Stats', 'detour');
 
     $admin_bar->add_menu(array(
-        'id'    => 'p404_free_top_button',
+        'id'    => 'detour_free_top_button',
         'title' => $menu_title,
         'href'  => false,
         'meta'  => array(
@@ -191,8 +191,8 @@ function p404_free_add_items($admin_bar)
     ));
 
     $admin_bar->add_menu(array(
-        'id'     => 'p404_free_top_button_dropdown',
-        'parent' => 'p404_free_top_button',
+        'id'     => 'detour_free_top_button_dropdown',
+        'parent' => 'detour_free_top_button',
         'title'  => $dropdown_html,
         'href'   => false,
         'meta'   => array('class' => 'p404-redirect-adminbar-dropdown-wrap')
@@ -201,7 +201,7 @@ function p404_free_add_items($admin_bar)
 }
 
 // Updated function to get correct redirect statistics
-function p404_get_redirect_statistics()
+function detour_get_redirect_statistics()
 {
     global $wpdb;
     $table_name = $wpdb->prefix . 'redirects_404';
@@ -246,7 +246,7 @@ function p404_get_redirect_statistics()
 
 
 // Updated CSS function with unique class names to prevent conflicts
-function p404_redirect_top_bar_enqueue_style()
+function detour_redirect_top_bar_enqueue_style()
 {
     wp_enqueue_style('admin-bar');
     $custom_css = '
@@ -257,13 +257,13 @@ function p404_redirect_top_bar_enqueue_style()
         margin-bottom: 6px;
     }
 
-    #wpadminbar #wp-admin-bar-p404_free_top_button .ab-icon:before {
+    #wpadminbar #wp-admin-bar-detour_free_top_button .ab-icon:before {
         content: "\f103";
         color: #dc3545;
         top: 3px;
     }
     
-    #wp-admin-bar-p404_free_top_button .ab-item {
+    #wp-admin-bar-detour_free_top_button .ab-item {
         min-width: 80px !important;
         padding: 0px !important;
     }
@@ -275,11 +275,11 @@ function p404_redirect_top_bar_enqueue_style()
         position: static !important;
     }
     
-    #wpadminbar #wp-admin-bar-p404_free_top_button_dropdown {
+    #wpadminbar #wp-admin-bar-detour_free_top_button_dropdown {
         position: static !important;
     }
     
-    #wpadminbar #wp-admin-bar-p404_free_top_button_dropdown .ab-item {
+    #wpadminbar #wp-admin-bar-detour_free_top_button_dropdown .ab-item {
         padding: 0 !important;
         margin: 0 !important;
     }
@@ -299,15 +299,15 @@ function p404_redirect_top_bar_enqueue_style()
     }
     
     /* Ensure P404 dropdown appears on hover */
-    #wpadminbar #wp-admin-bar-p404_free_top_button .p404-redirect-dropdown-container { 
+    #wpadminbar #wp-admin-bar-detour_free_top_button .p404-redirect-dropdown-container { 
         display: none !important;
     }
     
-    #wpadminbar #wp-admin-bar-p404_free_top_button:hover .p404-redirect-dropdown-container { 
+    #wpadminbar #wp-admin-bar-detour_free_top_button:hover .p404-redirect-dropdown-container { 
         display: block !important;
     }
     
-    #wpadminbar #wp-admin-bar-p404_free_top_button:hover #wp-admin-bar-p404_free_top_button_dropdown .p404-redirect-dropdown-container {
+    #wpadminbar #wp-admin-bar-detour_free_top_button:hover #wp-admin-bar-detour_free_top_button_dropdown .p404-redirect-dropdown-container {
         display: block !important;
     }
     
@@ -350,38 +350,38 @@ function p404_redirect_top_bar_enqueue_style()
         z-index: auto;
     }
     
-    #wpadminbar #wp-admin-bar-p404_free_top_button:hover > .ab-item {
+    #wpadminbar #wp-admin-bar-detour_free_top_button:hover > .ab-item {
         z-index: 999998 !important;
     }
     ';
     wp_add_inline_style('admin-bar', $custom_css);
 }
 
-function P404REDIRECT__filter_action_links($links)
+function Detour__filter_action_links($links)
 {
     $links['settings'] = sprintf('<a href="%s">Settings</a>', admin_url('admin.php?page=detour.php'));
     return $links;
 }
-add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'P404REDIRECT__filter_action_links', 10, 1);
+add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'Detour__filter_action_links', 10, 1);
 
 
 
-function p404_redirect()
+function detour_redirect()
 {
     if (!is_404()) {
         return;
     }
 
-    $options = P404REDIRECT_get_my_options();
-    $link    = P404REDIRECT_get_current_URL();
+    $options = Detour_get_my_options();
+    $link    = Detour_get_current_URL();
 
     // Per-URL rules win over the global default. A rule may apply 410 Gone
     // (no Location header) or any of 301/302/307/308.
-    if (function_exists('centct_p404_match_rule')) {
-        $rule = centct_p404_match_rule($link);
+    if (function_exists('detour_match_rule')) {
+        $rule = detour_match_rule($link);
         if ($rule) {
-            P404REDIRECT_add_redirected_link($link);
-            centct_p404_apply_rule($rule, $link);
+            Detour_add_redirected_link($link);
+            detour_apply_rule($rule, $link);
             // apply_rule exits on success; if it returned, the rule was
             // misconfigured (e.g. empty destination) and we fall through.
         }
@@ -402,7 +402,7 @@ function p404_redirect()
     $exclude_media = (isset($options['p404_execlude_media']) && $options['p404_execlude_media'] == '1');
 
     if (!$exclude_media || !$is_media_link) {
-        P404REDIRECT_add_redirected_link($link);
+        Detour_add_redirected_link($link);
     }
 
     wp_redirect($options['p404_redirect_to'], $redirect_type);
@@ -411,7 +411,7 @@ function p404_redirect()
 
 //---------------------------------------------------------------
 
-function p404_get_site_404_page_path()
+function detour_get_site_404_page_path()
 {
     $url = str_ireplace("://", "", site_url());
     $site_404_page = substr($url, stripos($url, "/"));
@@ -423,7 +423,7 @@ function p404_get_site_404_page_path()
 }
 //---------------------------------------------------------------
 
-function p404_check_default_permalink()
+function detour_check_default_permalink()
 {
     // Only verify once per day - this previously ran on every admin pageview,
     // re-reading .htaccess each time. The transient bust below cheaply caps it.
@@ -434,25 +434,25 @@ function p404_check_default_permalink()
 
     $file = get_home_path() . "/.htaccess";
     if (!file_exists($file)) {
-        insert_with_markers($file, 'FRedirect_ErrorDocument', 'ErrorDocument 404 ' . p404_get_site_404_page_path());
+        insert_with_markers($file, 'FRedirect_ErrorDocument', 'ErrorDocument 404 ' . detour_get_site_404_page_path());
         return;
     }
     $contents = @file_get_contents($file);
     if ($contents !== false && strpos($contents, 'FRedirect_ErrorDocument') === false) {
-        insert_with_markers($file, 'FRedirect_ErrorDocument', 'ErrorDocument 404 ' . p404_get_site_404_page_path());
+        insert_with_markers($file, 'FRedirect_ErrorDocument', 'ErrorDocument 404 ' . detour_get_site_404_page_path());
     }
 }
 
 
 //---------------------------------------------------------------
 
-function p404_header_code()
+function detour_header_code()
 {
-    p404_check_default_permalink();
+    detour_check_default_permalink();
 }
 
 
-function p404_enqueue_styles_scripts()
+function detour_enqueue_styles_scripts()
 {
     // Check if we are in the admin area and on the plugin's page
     if (is_admin() && isset($_GET['page']) && $_GET['page'] === 'detour.php') {
@@ -461,12 +461,12 @@ function p404_enqueue_styles_scripts()
     }
 }
 
-function p404_admin_menu()
+function detour_admin_menu()
 {
-    add_options_page('Detour', 'Detour', 'manage_options', basename(__FILE__), 'p404_options_menu');
+    add_options_page('Detour', 'Detour', 'manage_options', basename(__FILE__), 'detour_options_menu');
 }
 
-function p404_options_menu()
+function detour_options_menu()
 {
     if (!current_user_can('manage_options')) {
         wp_die(__('You do not have sufficient permissions to access this page.'));
@@ -474,9 +474,9 @@ function p404_options_menu()
     include "option_page.php";
 }
 
-add_action('admin_enqueue_scripts', 'p404_include_js');
+add_action('admin_enqueue_scripts', 'detour_include_js');
 
-function p404_include_js()
+function detour_include_js()
 {
 
     $mypage = isset($_GET['page']) ? $_GET['page'] : '';
@@ -493,9 +493,9 @@ function p404_include_js()
 
 
 
-function p404_modify_htaccess()
+function detour_modify_htaccess()
 {
-    $options = P404REDIRECT_get_my_options();
+    $options = Detour_get_my_options();
     if (isset($options['img_p404_status']) && $options['img_p404_status'] == 1) {
         $image_id = isset($options['image_id_p404_redirect_to']) ? absint($options['image_id_p404_redirect_to']) : '';
         if ($image_id != '') {
@@ -513,7 +513,7 @@ function p404_modify_htaccess()
     </IfModule>
     EOT;
                 //NC (no case, case insensitive, useless in this context) and L (last rule if applied)
-                return p404_add_htaccess($ruls);
+                return detour_add_htaccess($ruls);
             } else {
                 // Image doesn't exist, clear the option
                 $options['image_id_p404_redirect_to'] = '';
@@ -532,7 +532,7 @@ function p404_modify_htaccess()
 
 //echo WP_CONTENT_DIR;echo"<br>";
 //echo ABSPATH;exit;
-function p404_add_htaccess($insertion)
+function detour_add_htaccess($insertion)
 {
     //Clear the old htaccess file located inside the main website directory
     $htaccess_file = WP_CONTENT_DIR . '/.htaccess';
@@ -541,20 +541,20 @@ function p404_add_htaccess($insertion)
         touch($filename);
     }
     if (is_writable($filename)) {
-        return array('status' => true, 'massage' => p404_insert_with_markers_htaccess($htaccess_file, 'All_404_marker_comment_image', (array) $insertion));
+        return array('status' => true, 'massage' => detour_insert_with_markers_htaccess($htaccess_file, 'All_404_marker_comment_image', (array) $insertion));
     } else {
         return array('status' => false, 'massage' => $insertion);
     }
 }
 
-function p404_clear_htaccess()
+function detour_clear_htaccess()
 {
     $htaccess_file = WP_CONTENT_DIR . '/.htaccess';
 
-    p404_insert_with_markers_htaccess($htaccess_file, 'All_404_marker_comment_image', "");
+    detour_insert_with_markers_htaccess($htaccess_file, 'All_404_marker_comment_image', "");
 }
 
-function p404_insert_with_markers_htaccess($filename, $marker, $insertion)
+function detour_insert_with_markers_htaccess($filename, $marker, $insertion)
 {
     if (!file_exists($filename) || is_writeable($filename)) {
         if (!file_exists($filename)) {
