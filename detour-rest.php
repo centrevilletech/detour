@@ -13,6 +13,9 @@
  *   POST   rules/import           Bulk upsert: { rules: [rows], dry_run, replace }.
  *   GET    rules/export           Every rule as import rows (plus id and hits).
  *   GET    test?url=...&live=1    Which rule would handle a URL. Counts no hit.
+ *   GET    settings               Site-wide default redirect and additional hosts.
+ *   PUT    settings               Change any of: fallback_enabled, fallback_url,
+ *                                 fallback_status, allowed_hosts (array or text).
  *   GET    import/redirection     Rules from the Redirection plugin, as import rows.
  *   POST   import/redirection     Import them: { dry_run, replace }.
  *   GET    import/yoast           Redirects from Yoast SEO Premium, as import rows.
@@ -145,6 +148,23 @@ function detour_register_rest_routes() {
 					'required' => true,
 				),
 				'live' => $bool,
+			),
+		)
+	);
+
+	register_rest_route(
+		$ns,
+		'/settings',
+		array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => 'detour_rest_get_settings',
+				'permission_callback' => $perm,
+			),
+			array(
+				'methods'             => WP_REST_Server::EDITABLE,
+				'callback'            => 'detour_rest_update_settings',
+				'permission_callback' => $perm,
 			),
 		)
 	);
@@ -330,4 +350,47 @@ function detour_rest_test_url( WP_REST_Request $request ) {
 			'query'    => $rule && ! empty( $rule['_query'] ) ? $rule['_query'] : '',
 		)
 	);
+}
+
+function detour_rest_get_settings() {
+	$options = Detour_get_my_options();
+	return rest_ensure_response(
+		array(
+			'fallback_enabled' => isset( $options['p404_status'] ) && '1' === $options['p404_status'],
+			'fallback_url'     => isset( $options['p404_redirect_to'] ) ? (string) $options['p404_redirect_to'] : '',
+			'fallback_status'  => isset( $options['p404_redirect_type'] ) ? (int) $options['p404_redirect_type'] : 301,
+			'allowed_hosts'    => array_values( array_filter( explode( "\n", isset( $options['allowed_hosts'] ) ? (string) $options['allowed_hosts'] : '' ) ) ),
+			'effective_hosts'  => detour_allowed_hosts(),
+		)
+	);
+}
+
+function detour_rest_update_settings( WP_REST_Request $request ) {
+	$body    = (array) $request->get_json_params();
+	$options = Detour_get_my_options();
+
+	if ( array_key_exists( 'fallback_url', $body ) ) {
+		$url = trim( (string) $body['fallback_url'] );
+		if ( '' !== $url && '/' !== substr( $url, 0, 1 ) && ! filter_var( $url, FILTER_VALIDATE_URL ) ) {
+			return new WP_Error( 'detour_bad_url', 'fallback_url must be an absolute URL or a path beginning with /.', array( 'status' => 400 ) );
+		}
+		$options['p404_redirect_to'] = esc_url_raw( $url );
+	}
+	if ( array_key_exists( 'fallback_status', $body ) ) {
+		$status = (int) $body['fallback_status'];
+		if ( ! in_array( $status, array( 301, 302, 307, 308 ), true ) ) {
+			return new WP_Error( 'detour_bad_status', 'fallback_status must be 301, 302, 307 or 308.', array( 'status' => 400 ) );
+		}
+		$options['p404_redirect_type'] = (string) $status;
+	}
+	if ( array_key_exists( 'fallback_enabled', $body ) ) {
+		$options['p404_status'] = $body['fallback_enabled'] ? '1' : '2';
+	}
+	if ( array_key_exists( 'allowed_hosts', $body ) ) {
+		$raw                      = is_array( $body['allowed_hosts'] ) ? implode( "\n", $body['allowed_hosts'] ) : (string) $body['allowed_hosts'];
+		$options['allowed_hosts'] = detour_sanitize_allowed_hosts( $raw );
+	}
+
+	Detour_update_my_options( $options );
+	return detour_rest_get_settings();
 }
