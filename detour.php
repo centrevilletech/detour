@@ -3,7 +3,7 @@
  * Plugin Name: Detour
  * Plugin URI:  https://github.com/centrevilletech/detour
  * Description: Catch every 404 and route lost visitors to a destination that converts. Per-URL redirect rules with 301/302/307/308/410 support, sortable hit history, weekly email digests, and an indexed schema engineered for high-traffic sites.
- * Version:     1.4.0
+ * Version:     1.5.0
  * Author:      Centreville Tech LLC
  * Author URI:  https://centrevilletech.com
  * License:     GPL-2.0-or-later
@@ -31,6 +31,7 @@ add_action( 'plugins_loaded', 'detour_ensure_schema' );
 
 require_once 'detour-fixes.php';
 require_once 'detour-rules.php';
+require_once 'detour-cli.php';
 require_once 'functions.php';
 add_action( 'admin_menu', 'detour_admin_menu' );
 add_action( 'admin_head', 'detour_header_code' );
@@ -385,7 +386,22 @@ add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'Detour__filte
 
 
 function detour_redirect() {
+	if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+		return;
+	}
+
+	// An exact rule names one URL on purpose, so it applies even when that
+	// URL still resolves (an old archive or a page that is being retired).
+	// Prefix and regex rules and the global default only handle 404s, so a
+	// broad pattern can never take over live content.
 	if ( ! is_404() ) {
+		if ( function_exists( 'detour_match_rule' ) ) {
+			$link = Detour_get_current_URL();
+			$rule = detour_match_rule( $link, true );
+			if ( $rule ) {
+				detour_apply_rule( $rule, $link );
+			}
+		}
 		return;
 	}
 

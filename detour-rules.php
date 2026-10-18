@@ -84,29 +84,99 @@ function detour_rules_bump_cache() {
 // ============================================================
 
 /**
+ * Build the lookup keys for a request URL. Rules may be stored as a full
+ * URL (what the 404 log's "promote" button produces) or as a site-rooted
+ * path (what the rule form and the CLI importer suggest), so both forms are
+ * tried, each with and without the query string and the trailing slash.
+ * Keys are ordered most specific first.
+ *
+ * @return array[] Each entry: array( 'key' => string, 'subject' => string,
+ *                 'query_dropped' => bool ).
+ */
+function detour_match_candidates( $url ) {
+	$parts  = wp_parse_url( $url );
+	$path   = isset( $parts['path'] ) && '' !== $parts['path'] ? $parts['path'] : '/';
+	$query  = isset( $parts['query'] ) ? $parts['query'] : '';
+	$origin = isset( $parts['scheme'], $parts['host'] ) ? $parts['scheme'] . '://' . $parts['host'] : '';
+
+	$paths = array( $path );
+	if ( '/' !== $path ) {
+		$paths[] = '/' === substr( $path, -1 ) ? rtrim( $path, '/' ) : $path . '/';
+	}
+	$lower = array_map( 'strtolower', $paths );
+	$paths = array_values( array_unique( array_merge( $paths, $lower ) ) );
+
+	$out = array();
+	foreach ( array( true, false ) as $with_query ) {
+		if ( $with_query && '' === $query ) {
+			continue;
+		}
+		foreach ( $paths as $p ) {
+			$subject = $with_query ? $p . '?' . $query : $p;
+			foreach ( array( $origin, '' ) as $base ) {
+				$out[] = array(
+					'key'           => $base . $subject,
+					'subject'       => $subject,
+					'query_dropped' => '' !== $query && ! $with_query,
+				);
+			}
+		}
+	}
+	return $out;
+}
+
+/**
  * Try to find a rule matching the given URL. Returns the rule row
  * (associative array) or null. Match priority: exact → longest prefix → regex.
+ *
+ * The returned row carries two extra keys used by detour_apply_rule():
+ * `_subject` (the path the rule matched) and `_query` (the request query
+ * string when the rule matched without it, so it can be carried over).
+ * Pass $exact_only to skip prefix and regex rules.
  */
-function detour_match_rule( $url ) {
+function detour_match_rule( $url, $exact_only = false ) {
 	global $wpdb;
-	$table = detour_rules_table_name();
+	$table      = detour_rules_table_name();
+	$candidates = detour_match_candidates( $url );
+	$query      = (string) wp_parse_url( $url, PHP_URL_QUERY );
 
-	// 1. Exact match by hash key (single-row indexed lookup).
-	$rule = $wpdb->get_row(
+	// 1. Exact match by hash key (indexed lookup over all candidate keys).
+	$keys   = array_values( array_unique( wp_list_pluck( $candidates, 'key' ) ) );
+	$holder = implode( ',', array_fill( 0, count( $keys ), 'UNHEX(MD5(%s))' ) );
+	$rows   = $wpdb->get_results(
 		$wpdb->prepare(
 			"SELECT * FROM `{$table}`
 			 WHERE match_type = 'exact' AND is_active = 1
-			   AND source_hash = UNHEX(MD5(%s))
-			   AND source_pattern = %s
-			 LIMIT 1",
-			$url,
-			$url
+			   AND source_hash IN ({$holder})",
+			$keys
 		),
 		ARRAY_A
 	);
-	if ( $rule ) {
-		return $rule;
+	if ( $rows ) {
+		$by_key = array();
+		foreach ( $rows as $row ) {
+			$by_key[ $row['source_pattern'] ] = $row;
+		}
+		foreach ( $candidates as $c ) {
+			if ( isset( $by_key[ $c['key'] ] ) ) {
+				$rule             = $by_key[ $c['key'] ];
+				$rule['_subject'] = $c['subject'];
+				$rule['_query']   = $c['query_dropped'] ? $query : '';
+				return $rule;
+			}
+		}
 	}
+
+	if ( $exact_only ) {
+		return null;
+	}
+
+	// Prefix and regex rules see the site-rooted path (with query string)
+	// first, then the full URL, so patterns written either way work.
+	$parts    = wp_parse_url( $url );
+	$path     = ( isset( $parts['path'] ) && '' !== $parts['path'] ? $parts['path'] : '/' )
+		. ( '' !== $query ? '?' . $query : '' );
+	$subjects = array_unique( array( $path, $url ) );
 
 	// 2. Prefix match - longest-pattern wins.
 	$v            = detour_rules_cache_version();
@@ -121,8 +191,12 @@ function detour_match_rule( $url ) {
 		wp_cache_set( "prefix_rules_v{$v}", $prefix_rules, DETOUR_RULES_CACHE_GROUP, 300 );
 	}
 	foreach ( $prefix_rules as $r ) {
-		if ( strpos( $url, $r['source_pattern'] ) === 0 ) {
-			return $r;
+		foreach ( $subjects as $subject ) {
+			if ( strpos( $subject, $r['source_pattern'] ) === 0 ) {
+				$r['_subject'] = $subject;
+				$r['_query']   = '';
+				return $r;
+			}
 		}
 	}
 
@@ -139,8 +213,12 @@ function detour_match_rule( $url ) {
 	}
 	foreach ( $regex_rules as $r ) {
 		$pattern = detour_normalize_regex( $r['source_pattern'] );
-		if ( @preg_match( $pattern, $url ) === 1 ) {
-			return $r;
+		foreach ( $subjects as $subject ) {
+			if ( @preg_match( $pattern, $subject ) === 1 ) {
+				$r['_subject'] = $subject;
+				$r['_query']   = '';
+				return $r;
+			}
 		}
 	}
 
@@ -165,6 +243,36 @@ function detour_normalize_regex( $pattern ) {
 }
 
 /**
+ * Best-effort hit counter; failures never block the response.
+ */
+function detour_count_rule_hit( $rule ) {
+	global $wpdb;
+	$wpdb->query(
+		$wpdb->prepare(
+			'UPDATE `' . detour_rules_table_name() . '` SET hit_count = hit_count + 1, last_hit_at = %s WHERE id = %d',
+			current_time( 'mysql' ),
+			(int) $rule['id']
+		)
+	);
+}
+
+/**
+ * True when two URLs point at the same host, path and query, ignoring
+ * scheme, a leading "www.", letter case and the trailing slash. A URL
+ * without a host (a site-rooted path) counts as this site.
+ */
+function detour_is_same_url( $a, $b ) {
+	$home = wp_parse_url( home_url(), PHP_URL_HOST );
+	$norm = function ( $u ) use ( $home ) {
+		$p    = wp_parse_url( $u );
+		$host = strtolower( preg_replace( '/^www\./i', '', isset( $p['host'] ) ? $p['host'] : (string) $home ) );
+		$path = isset( $p['path'] ) ? strtolower( untrailingslashit( $p['path'] ) ) : '';
+		return $host . $path . ( isset( $p['query'] ) ? '?' . $p['query'] : '' );
+	};
+	return $norm( $a ) === $norm( $b );
+}
+
+/**
  * Apply a matched rule. For 410, emits Gone and exits. For redirects,
  * substitutes {path} for prefix-mode and emits a Location header. The
  * hit counter is updated best-effort; failures don't block the response.
@@ -173,17 +281,10 @@ function detour_apply_rule( $rule, $url ) {
 	global $wpdb;
 	$table = detour_rules_table_name();
 
-	$wpdb->query(
-		$wpdb->prepare(
-			"UPDATE `{$table}` SET hit_count = hit_count + 1, last_hit_at = %s WHERE id = %d",
-			current_time( 'mysql' ),
-			(int) $rule['id']
-		)
-	);
-
 	$status = (int) $rule['redirect_status'];
 
 	if ( 410 === $status ) {
+		detour_count_rule_hit( $rule );
 		status_header( 410 );
 		nocache_headers();
 		header( 'Content-Type: text/html; charset=utf-8' );
@@ -197,12 +298,41 @@ function detour_apply_rule( $rule, $url ) {
 		return; // misconfigured; let caller fall through to global default
 	}
 
+	$subject = isset( $rule['_subject'] ) ? $rule['_subject'] : $url;
+
 	// {path} substitution for prefix rules: append the unmatched tail.
 	if ( 'prefix' === $rule['match_type'] && strpos( $destination, '{path}' ) !== false ) {
-		$tail        = substr( $url, strlen( $rule['source_pattern'] ) );
+		$tail        = substr( $subject, strlen( $rule['source_pattern'] ) );
 		$destination = str_replace( '{path}', $tail, $destination );
 	}
 
+	// $1-style backreferences for regex rules.
+	if ( 'regex' === $rule['match_type'] && preg_match( '/\$\d/', $destination ) ) {
+		$pattern = detour_normalize_regex( $rule['source_pattern'] );
+		if ( preg_match( $pattern, $subject, $m ) === 1 ) {
+			$destination = preg_replace_callback(
+				'/\$(\d+)/',
+				function ( $ref ) use ( $m ) {
+					return isset( $m[ (int) $ref[1] ] ) ? $m[ (int) $ref[1] ] : '';
+				},
+				$destination
+			);
+		}
+	}
+
+	// A rule that matched without the query string passes it through, so
+	// campaign tags (utm_*, gclid) survive the redirect.
+	if ( ! empty( $rule['_query'] ) ) {
+		$destination .= ( strpos( $destination, '?' ) === false ? '?' : '&' ) . $rule['_query'];
+	}
+
+	// Never redirect a URL to itself (e.g. `/page` -> `/page/` when the
+	// request was already `/page/`). Returning lets the page render.
+	if ( detour_is_same_url( $destination, $url ) ) {
+		return;
+	}
+
+	detour_count_rule_hit( $rule );
 	wp_redirect( $destination, $status );
 	exit;
 }
@@ -599,8 +729,8 @@ endif;
 				</p>
 				<p>
 					<label><strong>Source pattern</strong></label><br>
-					<input type="text" id="centct-rule-source" placeholder="https://example.com/old-page/" style="width:100%;font-family:monospace;">
-					<span style="color:#6b7280;font-size:12px;">Full URL for exact, leading path for prefix, or a regex like <code>~^/old/(\d+)$~</code> for regex.</span>
+					<input type="text" id="centct-rule-source" placeholder="/old-page/" style="width:100%;font-family:monospace;">
+					<span style="color:#6b7280;font-size:12px;">A path like <code>/old-page/</code> or a full URL. Prefix matches the start of the path. Regex example: <code>~^/old/(\d+)/?$~</code> (use <code>$1</code> in the destination).</span>
 				</p>
 				<p>
 					<label><strong>Status code</strong></label><br>
@@ -663,7 +793,7 @@ endif;
 
 		$('#centct-rule-save').on('click', function(){
 			var data = {
-				action: 'detour_save_rule',
+				action: 'centct_p404_save_rule',
 				nonce: nonce,
 				id: parseInt($('#centct-rule-id').val(), 10) || 0,
 				match_type: $('#centct-rule-match-type').val(),
@@ -686,7 +816,7 @@ endif;
 
 		$(document).on('click', '.centct-edit', function(){
 			var id = $(this).closest('tr').data('rule-id');
-			$.post(ajaxurl, {action:'detour_get_rule', nonce:nonce, id:id}).done(function(resp){
+			$.post(ajaxurl, {action:'centct_p404_get_rule', nonce:nonce, id:id}).done(function(resp){
 				if (resp && resp.success) openModal(resp.data);
 			});
 		});
@@ -694,12 +824,12 @@ endif;
 		$(document).on('click', '.centct-delete', function(){
 			if (!confirm('Delete this rule?')) return;
 			var id = $(this).closest('tr').data('rule-id');
-			$.post(ajaxurl, {action:'detour_delete_rule', nonce:nonce, id:id}).done(function(){ location.reload(); });
+			$.post(ajaxurl, {action:'centct_p404_delete_rule', nonce:nonce, id:id}).done(function(){ location.reload(); });
 		});
 
 		$(document).on('change', '.centct-toggle', function(){
 			var id = $(this).closest('tr').data('rule-id');
-			$.post(ajaxurl, {action:'detour_toggle_rule', nonce:nonce, id:id});
+			$.post(ajaxurl, {action:'centct_p404_toggle_rule', nonce:nonce, id:id});
 		});
 
 		if (promote) { openModal({source_pattern: promote, match_type: 'exact', redirect_status: 301}); }
