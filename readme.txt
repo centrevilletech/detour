@@ -4,7 +4,7 @@ Tags: 404, redirect, broken-links, seo, gone
 Requires at least: 5.0
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.6.0
+Stable tag: 1.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -92,6 +92,15 @@ Yes. Exact-match rules use a `BINARY(16)` MD5 hash column with its own BTREE ind
 4. The 404 URLs log: sortable hit history with a one-click "Make rule" button on every row.
 
 == Changelog ==
+
+= 1.7.0 =
+* New: REST API at `/wp-json/detour/v1` for scripts that only have an application password: list, create, update and delete rules, bulk import (`rules/import`, with `dry_run` and `replace`), export, and `test`. Every route requires `manage_options`. Import rows use the CSV columns (`source`, `destination`, `status`, `match_type`, `notes`, `active`, `live`) and update a rule when its source and match type already exist. A `replace` import runs in one transaction and rolls back if no row could be saved.
+* New: import from the Redirection plugin (`import/redirection`) and from Yoast SEO Premium redirects (`import/yoast`). GET previews the converted rows and lists what was skipped and why. POST imports them. Duplicates that the old plugin never reached (same URL in another letter case or with a trailing slash) are skipped, and case-insensitive rules stay case-insensitive.
+* New: Detour never redirects wp-admin, wp-login.php, the WPS Hide Login slug, the REST API, wp-cron.php, xmlrpc.php, robots.txt or `/.well-known/`, so a catch-all rule cannot lock administrators out or block certificate renewal. Filter: `detour_excluded_path_prefixes`.
+* Fixed: rules written with a space or other encoded character (`/old page.html`) never matched, because the browser sends `/old%20page.html`. Matching now also tries the decoded path.
+* Fixed: a new install turned the site-wide default redirect on, sending every 404 to the homepage before anyone had configured it. It now starts off. Existing settings are not changed.
+* Fixed: clearing a deleted fallback image wrote to an unused option (`p404_redirect_options`), so the stale image ID stayed in the real settings.
+* Fixed: deactivating left the `ErrorDocument` block in the root `.htaccess`, and uninstalling looked for the image rules in the uploads folder instead of `wp-content`.
 
 = 1.6.0 =
 * New: prefix and regex rules can opt in to "Also redirect live pages" (the `match_live` column; `live` in CLI import/export), so a single pattern can move a whole site or section even where pages still resolve. Off by default, so existing rules behave as before. Rules table schema goes to version 2 and the column is added on upgrade.
