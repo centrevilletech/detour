@@ -98,6 +98,7 @@ Yes. Exact-match rules use a `BINARY(16)` MD5 hash column with its own BTREE ind
 * New: "Additional hosts" setting and a `detour_allowed_hosts` filter, for sites that serve the same install on more than one domain. Requests for other hosts are still ignored.
 * New: `wp detour test <url> --live` checks a URL as a page that still resolves instead of as a 404.
 * Fixed: a request with an unrecognised Host header or a URI longer than 2000 characters was treated as a request for the homepage, so a `/` rule redirected it. Detour now ignores those requests.
+* Fixed: a destination URL containing non-ASCII characters (for example `ⓡ`) was rejected as invalid.
 * Fixed: the port-443 HTTPS check never matched because it compared a string to an integer. Detour now uses `is_ssl()`.
 
 = 1.5.0 =

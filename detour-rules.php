@@ -518,8 +518,17 @@ function detour_sanitize_rule_input( $data ) {
 		if ( strlen( $destination_url ) > 2000 ) {
 			return new WP_Error( 'invalid_dest', 'Destination URL exceeds 2000 characters.' );
 		}
-		// Allow either an absolute URL or a site-rooted path.
-		if ( substr( $destination_url, 0, 1 ) !== '/' && ! filter_var( $destination_url, FILTER_VALIDATE_URL ) ) {
+		// Allow either an absolute URL or a site-rooted path. FILTER_VALIDATE_URL
+		// rejects non-ASCII characters, so validate a percent-encoded copy;
+		// wp_redirect() encodes them the same way when it sends the header.
+		$ascii_dest = preg_replace_callback(
+			'/[^\x20-\x7e]+/',
+			function ( $m ) {
+				return rawurlencode( $m[0] );
+			},
+			$destination_url
+		);
+		if ( substr( $destination_url, 0, 1 ) !== '/' && ! filter_var( $ascii_dest, FILTER_VALIDATE_URL ) ) {
 			return new WP_Error( 'invalid_dest', 'Destination must be an absolute URL or a path beginning with /.' );
 		}
 	} else {
