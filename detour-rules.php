@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-const DETOUR_RULES_VERSION     = '1';
+const DETOUR_RULES_VERSION     = '2';
 const DETOUR_RULES_CACHE_GROUP = 'detour_rules';
 
 function detour_rules_table_name() {
@@ -44,6 +44,7 @@ function detour_create_rules_table() {
 				destination_url TEXT NULL,
 				redirect_status SMALLINT UNSIGNED NOT NULL DEFAULT 301,
 				is_active TINYINT(1) NOT NULL DEFAULT 1,
+				match_live TINYINT(1) NOT NULL DEFAULT 0,
 				hit_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
 				last_hit_at DATETIME NULL,
 				notes VARCHAR(255) NULL,
@@ -55,6 +56,20 @@ function detour_create_rules_table() {
 				KEY idx_hit_count (hit_count)
 			) {$charset}"
 		);
+	} else {
+		// Schema 2 adds match_live: a prefix or regex rule that also fires
+		// when the requested URL still resolves.
+		$has_live = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT COUNT(*) FROM information_schema.COLUMNS
+				 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s',
+				$table,
+				'match_live'
+			)
+		);
+		if ( ! $has_live ) {
+			$wpdb->query( "ALTER TABLE `{$table}` ADD COLUMN match_live TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active" );
+		}
 	}
 
 	update_option( 'centct_p404_rules_schema_version', DETOUR_RULES_VERSION, false );
@@ -132,9 +147,10 @@ function detour_match_candidates( $url ) {
  * The returned row carries two extra keys used by detour_apply_rule():
  * `_subject` (the path the rule matched) and `_query` (the request query
  * string when the rule matched without it, so it can be carried over).
- * Pass $exact_only to skip prefix and regex rules.
+ * Pass $live when the URL still resolves (not a 404): exact rules apply as
+ * usual, but prefix and regex rules apply only if they set match_live.
  */
-function detour_match_rule( $url, $exact_only = false ) {
+function detour_match_rule( $url, $live = false ) {
 	global $wpdb;
 	$table      = detour_rules_table_name();
 	$candidates = detour_match_candidates( $url );
@@ -167,10 +183,6 @@ function detour_match_rule( $url, $exact_only = false ) {
 		}
 	}
 
-	if ( $exact_only ) {
-		return null;
-	}
-
 	// Prefix and regex rules see the site-rooted path (with query string)
 	// first, then the full URL, so patterns written either way work.
 	$parts    = wp_parse_url( $url );
@@ -191,6 +203,9 @@ function detour_match_rule( $url, $exact_only = false ) {
 		wp_cache_set( "prefix_rules_v{$v}", $prefix_rules, DETOUR_RULES_CACHE_GROUP, 300 );
 	}
 	foreach ( $prefix_rules as $r ) {
+		if ( $live && empty( $r['match_live'] ) ) {
+			continue;
+		}
 		foreach ( $subjects as $subject ) {
 			if ( strpos( $subject, $r['source_pattern'] ) === 0 ) {
 				$r['_subject'] = $subject;
@@ -212,6 +227,9 @@ function detour_match_rule( $url, $exact_only = false ) {
 		wp_cache_set( "regex_rules_v{$v}", $regex_rules, DETOUR_RULES_CACHE_GROUP, 300 );
 	}
 	foreach ( $regex_rules as $r ) {
+		if ( $live && empty( $r['match_live'] ) ) {
+			continue;
+		}
 		$pattern = detour_normalize_regex( $r['source_pattern'] );
 		foreach ( $subjects as $subject ) {
 			if ( @preg_match( $pattern, $subject ) === 1 ) {
@@ -409,9 +427,10 @@ function detour_create_rule( $data ) {
 			'destination_url' => $clean['destination_url'],
 			'redirect_status' => $clean['redirect_status'],
 			'is_active'       => $clean['is_active'],
+			'match_live'      => $clean['match_live'],
 			'notes'           => $clean['notes'],
 		),
-		array( '%s', '%s', '%s', '%d', '%d', '%s' )
+		array( '%s', '%s', '%s', '%d', '%d', '%d', '%s' )
 	);
 	if ( ! $ok ) {
 		return new WP_Error( 'db_insert', $wpdb->last_error ?: 'Insert failed' );
@@ -435,10 +454,11 @@ function detour_update_rule( $id, $data ) {
 			'destination_url' => $clean['destination_url'],
 			'redirect_status' => $clean['redirect_status'],
 			'is_active'       => $clean['is_active'],
+			'match_live'      => $clean['match_live'],
 			'notes'           => $clean['notes'],
 		),
 		array( 'id' => (int) $id ),
-		array( '%s', '%s', '%s', '%d', '%d', '%s' ),
+		array( '%s', '%s', '%s', '%d', '%d', '%d', '%s' ),
 		array( '%d' )
 	);
 	if ( false === $ok ) {
@@ -498,8 +518,17 @@ function detour_sanitize_rule_input( $data ) {
 		if ( strlen( $destination_url ) > 2000 ) {
 			return new WP_Error( 'invalid_dest', 'Destination URL exceeds 2000 characters.' );
 		}
-		// Allow either an absolute URL or a site-rooted path.
-		if ( substr( $destination_url, 0, 1 ) !== '/' && ! filter_var( $destination_url, FILTER_VALIDATE_URL ) ) {
+		// Allow either an absolute URL or a site-rooted path. FILTER_VALIDATE_URL
+		// rejects non-ASCII characters, so validate a percent-encoded copy;
+		// wp_redirect() encodes them the same way when it sends the header.
+		$ascii_dest = preg_replace_callback(
+			'/[^\x20-\x7e]+/',
+			function ( $m ) {
+				return rawurlencode( $m[0] );
+			},
+			$destination_url
+		);
+		if ( substr( $destination_url, 0, 1 ) !== '/' && ! filter_var( $ascii_dest, FILTER_VALIDATE_URL ) ) {
 			return new WP_Error( 'invalid_dest', 'Destination must be an absolute URL or a path beginning with /.' );
 		}
 	} else {
@@ -514,12 +543,15 @@ function detour_sanitize_rule_input( $data ) {
 	}
 
 	$is_active = ! empty( $data['is_active'] ) ? 1 : 0;
+	// Exact rules always apply to live pages, so the flag only means
+	// something for prefix and regex rules.
+	$match_live = 'exact' !== $match_type && ! empty( $data['match_live'] ) ? 1 : 0;
 	$notes     = isset( $data['notes'] ) ? sanitize_text_field( (string) $data['notes'] ) : '';
 	if ( strlen( $notes ) > 255 ) {
 		$notes = substr( $notes, 0, 255 );
 	}
 
-	return compact( 'match_type', 'source_pattern', 'destination_url', 'redirect_status', 'is_active', 'notes' );
+	return compact( 'match_type', 'source_pattern', 'destination_url', 'redirect_status', 'is_active', 'match_live', 'notes' );
 }
 
 // ============================================================
@@ -549,6 +581,7 @@ function detour_ajax_save_rule() {
 		'destination_url' => isset( $_POST['destination_url'] ) ? wp_unslash( $_POST['destination_url'] ) : '',
 		'redirect_status' => isset( $_POST['redirect_status'] ) ? (int) $_POST['redirect_status'] : 301,
 		'is_active'       => isset( $_POST['is_active'] ) ? (int) $_POST['is_active'] : 0,
+		'match_live'      => isset( $_POST['match_live'] ) ? (int) $_POST['match_live'] : 0,
 		'notes'           => isset( $_POST['notes'] ) ? wp_unslash( $_POST['notes'] ) : '',
 	);
 
@@ -623,7 +656,7 @@ function detour_render_rules_tab() {
 		<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
 			<div>
 				<h3 style="margin:0;"><span class="dashicons dashicons-randomize"></span> Per-URL Rules</h3>
-				<p style="margin:6px 0 0;color:#6b7280;">Match incoming 404s against rules and redirect each one to its own destination, or return <code>410 Gone</code> for permanently-deleted pages.</p>
+				<p style="margin:6px 0 0;color:#6b7280;">Match incoming requests against rules and redirect each one to its own destination, or return <code>410 Gone</code> for permanently-deleted pages.</p>
 			</div>
 			<button type="button" class="button button-primary" id="centct-rule-new">+ Add Rule</button>
 		</div>
@@ -673,6 +706,9 @@ function detour_render_rules_tab() {
 								<span style="background:<?php echo esc_attr( $type_color[ $r['match_type'] ] ); ?>;color:#fff;padding:3px 8px;border-radius:4px;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;">
 									<?php echo esc_html( $r['match_type'] ); ?>
 								</span>
+								<?php if ( ! empty( $r['match_live'] ) ) : ?>
+									<span title="Also redirects pages that still resolve" style="display:inline-block;margin-top:4px;background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;text-transform:uppercase;">live</span>
+								<?php endif; ?>
 							</td>
 							<td style="font-family:monospace;font-size:12px;word-break:break-all;"><?php echo esc_html( $r['source_pattern'] ); ?></td>
 							<td style="font-family:monospace;font-size:12px;word-break:break-all;">
@@ -751,6 +787,10 @@ endif;
 					<label><strong>Notes (optional)</strong></label><br>
 					<input type="text" id="centct-rule-notes" maxlength="255" placeholder="Why this rule exists..." style="width:100%;">
 				</p>
+				<p id="centct-rule-live-row">
+					<label><input type="checkbox" id="centct-rule-live"> <strong>Also redirect live pages</strong></label><br>
+					<span style="color:#6b7280;font-size:12px;">By default prefix and regex rules only catch 404s. Tick this to redirect matching URLs even when the page still exists (for example, a whole-site move). Exact rules always do.</span>
+				</p>
 				<p>
 					<label><input type="checkbox" id="centct-rule-active" checked> <strong>Active</strong></label>
 				</p>
@@ -778,8 +818,10 @@ endif;
 			$('#centct-rule-status').val(rule.redirect_status || 301);
 			$('#centct-rule-notes').val(rule.notes || '');
 			$('#centct-rule-active').prop('checked', rule.id ? !!parseInt(rule.is_active, 10) : true);
+			$('#centct-rule-live').prop('checked', !!parseInt(rule.match_live || 0, 10));
 			$('#centct-rule-error').hide().text('');
 			toggleDestRow();
+			toggleLiveRow();
 		}
 		function openModal(rule) { setVal(rule || {}); $('#centct-rule-modal').css('display', 'flex'); }
 		function closeModal()    { $('#centct-rule-modal').hide(); }
@@ -787,7 +829,12 @@ endif;
 			$('#centct-rule-dest-row').toggle(parseInt($('#centct-rule-status').val(), 10) !== 410);
 		}
 
+		function toggleLiveRow() {
+			$('#centct-rule-live-row').toggle($('#centct-rule-match-type').val() !== 'exact');
+		}
+
 		$('#centct-rule-status').on('change', toggleDestRow);
+		$('#centct-rule-match-type').on('change', toggleLiveRow);
 		$('#centct-rule-new').on('click', function(){ openModal(); });
 		$('#centct-rule-cancel').on('click', closeModal);
 
@@ -801,7 +848,8 @@ endif;
 				destination_url: $('#centct-rule-dest').val(),
 				redirect_status: parseInt($('#centct-rule-status').val(), 10),
 				notes: $('#centct-rule-notes').val(),
-				is_active: $('#centct-rule-active').is(':checked') ? 1 : 0
+				is_active: $('#centct-rule-active').is(':checked') ? 1 : 0,
+				match_live: $('#centct-rule-live').is(':checked') ? 1 : 0
 			};
 			$('#centct-rule-save').prop('disabled', true);
 			$.post(ajaxurl, data).done(function(resp){

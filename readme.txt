@@ -4,7 +4,7 @@ Tags: 404, redirect, broken-links, seo, gone
 Requires at least: 5.0
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -92,6 +92,14 @@ Yes. Exact-match rules use a `BINARY(16)` MD5 hash column with its own BTREE ind
 4. The 404 URLs log: sortable hit history with a one-click "Make rule" button on every row.
 
 == Changelog ==
+
+= 1.6.0 =
+* New: prefix and regex rules can opt in to "Also redirect live pages" (the `match_live` column; `live` in CLI import/export), so a single pattern can move a whole site or section even where pages still resolve. Off by default, so existing rules behave as before. Rules table schema goes to version 2 and the column is added on upgrade.
+* New: "Additional hosts" setting and a `detour_allowed_hosts` filter, for sites that serve the same install on more than one domain. Requests for other hosts are still ignored.
+* New: `wp detour test <url> --live` checks a URL as a page that still resolves instead of as a 404.
+* Fixed: a request with an unrecognised Host header or a URI longer than 2000 characters was treated as a request for the homepage, so a `/` rule redirected it. Detour now ignores those requests.
+* Fixed: a destination URL containing non-ASCII characters (for example `ⓡ`) was rejected as invalid.
+* Fixed: the port-443 HTTPS check never matched because it compared a string to an integer. Detour now uses `is_ssl()`.
 
 = 1.5.0 =
 * Fixed: Add, Edit, Delete and Toggle on the Rules tab did nothing. The 1.2.0 prefix rename changed the AJAX action names in the JavaScript but not in PHP.

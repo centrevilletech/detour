@@ -21,6 +21,9 @@ if ( '' !== $redirect_to ) {
 		Detour_save_option_value( 'img_p404_status', sanitize_text_field( $_POST['img_p404_status'] ) );
 		Detour_save_option_value( 'image_id_p404_redirect_to', sanitize_text_field( $_POST['misha-img'] ) );
 		Detour_save_option_value( 'p404_redirect_type', sanitize_text_field( $_POST['p404_redirect_type'] ) );
+		if ( isset( $_POST['detour_allowed_hosts'] ) ) {
+			Detour_save_option_value( 'allowed_hosts', detour_sanitize_allowed_hosts( wp_unslash( $_POST['detour_allowed_hosts'] ) ) );
+		}
 		Detour_save_option_value( 'email_notifications_enabled', sanitize_text_field( $_POST['email_notifications_enabled'] ) );
 		Detour_save_option_value( 'email_frequency', sanitize_text_field( $_POST['email_frequency'] ) );
 		Detour_save_option_value( 'notification_email', sanitize_email( $_POST['notification_email'] ) );
@@ -296,6 +299,14 @@ $notification_email = Detour_read_option_value( 'notification_email', get_option
 								$drop->select( $detour_execlude_media_val );
 								?>
 								<div class="help-text">Skip missing media file requests in the activity log to keep it focused on real pages.</div>
+							</div>
+						</div>
+
+						<div class="form-group">
+							<label class="form-label">Additional hosts:</label>
+							<div class="form-control">
+								<textarea name="detour_allowed_hosts" rows="3" style="width:100%;font-family:monospace;" placeholder="example.org"><?php echo esc_textarea( isset( $options['allowed_hosts'] ) ? $options['allowed_hosts'] : '' ); ?></textarea>
+								<div class="help-text">Other domains that serve this site, one per line. The www variant of each is added automatically. Detour ignores requests for any host that is not this site's own or listed here.</div>
 							</div>
 						</div>
 					</div>

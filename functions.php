@@ -337,13 +337,10 @@ function clear_redirects_log_handler() {
 }
 
 function Detour_get_current_URL() {
-	// Determine protocol securely
+	// is_ssl() covers HTTPS=on and port 443; the forwarded header covers a
+	// TLS-terminating proxy such as Cloudflare.
 	$protocol = 'http://';
-	if ( isset( $_SERVER['HTTPS'] ) && 'off' !== $_SERVER['HTTPS'] ) {
-		$protocol = 'https://';
-	} elseif ( isset( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) && 'https' === $_SERVER['HTTP_X_FORWARDED_PROTO'] ) {
-		$protocol = 'https://';
-	} elseif ( isset( $_SERVER['SERVER_PORT'] ) && 443 === $_SERVER['SERVER_PORT'] ) {
+	if ( is_ssl() || ( isset( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) && 'https' === $_SERVER['HTTP_X_FORWARDED_PROTO'] ) ) {
 		$protocol = 'https://';
 	}
 
@@ -356,32 +353,20 @@ function Detour_get_current_URL() {
 		$host            = sanitize_text_field( trim( $forwarded_hosts[0] ) );
 	}
 
+	// Every fallback below returns an empty string rather than home_url(): a
+	// home_url() fallback would look like a homepage request and match a "/"
+	// rule, sending unrelated traffic to that rule's destination.
 	if ( empty( $host ) ) {
-		return home_url(); // Fallback to WordPress home URL
+		return '';
 	}
 
-	// Validate host against allowed hosts
-	$parsed_home  = parse_url( home_url() );
-	$home_host    = isset( $parsed_home['host'] ) ? strtolower( $parsed_home['host'] ) : '';
-	$request_host = strtolower( $host );
+	// Validate host against allowed hosts. Strip the port before comparing
+	// (e.g. example.com:8080 → example.com).
+	$request_host_no_port = preg_replace( '/:\d+$/', '', strtolower( $host ) );
 
-	// Strip port numbers before comparison (e.g. example.com:8080 → example.com)
-	$request_host_no_port = preg_replace( '/:\d+$/', '', $request_host );
-	$home_host_no_port    = preg_replace( '/:\d+$/', '', $home_host );
-
-	// Build list of allowed hosts: bare domain + www variant
-	$allowed_hosts = array( $home_host_no_port );
-	if ( strpos( $home_host_no_port, 'www.' ) === 0 ) {
-		// home_url has www → also allow without www
-		$allowed_hosts[] = substr( $home_host_no_port, 4 );
-	} else {
-		// home_url has no www → also allow with www
-		$allowed_hosts[] = 'www.' . $home_host_no_port;
-	}
-
-	if ( ! in_array( $request_host_no_port, $allowed_hosts, true ) ) {
+	if ( ! in_array( $request_host_no_port, detour_allowed_hosts(), true ) ) {
 		error_log( 'Detour: Suspicious host detected - ' . $host );
-		return home_url(); // Security fallback
+		return '';
 	}
 
 	// Sanitize URI
@@ -397,11 +382,58 @@ function Detour_get_current_URL() {
 	// Additional validation
 	if ( strlen( $uri ) > 2000 ) { // URLs shouldn't be this long
 		error_log( 'Detour: Unusually long URI detected' );
-		return home_url();
+		return '';
 	}
 
 	return $protocol . $host . $uri;
 }
+/**
+ * Hosts Detour acts on: the home_url() host, the extra hosts saved under
+ * Settings (one per line), and the www / non-www variant of each. Filter
+ * with `detour_allowed_hosts` to add or remove hosts in code.
+ *
+ * @return string[] Lowercase host names without ports.
+ */
+function detour_allowed_hosts() {
+	$hosts = array( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+	$extra = (string) Detour_read_option_value( 'allowed_hosts', '' );
+	$hosts = array_merge( $hosts, preg_split( '/[\s,]+/', $extra, -1, PREG_SPLIT_NO_EMPTY ) );
+
+	$out = array();
+	foreach ( $hosts as $h ) {
+		$h = strtolower( trim( $h ) );
+		if ( strpos( $h, '://' ) !== false ) {
+			$h = (string) wp_parse_url( $h, PHP_URL_HOST );
+		}
+		$h = preg_replace( '/[:\/].*$/', '', $h );
+		if ( '' === $h ) {
+			continue;
+		}
+		$bare  = preg_replace( '/^www\./', '', $h );
+		$out[] = $bare;
+		$out[] = 'www.' . $bare;
+	}
+	return array_values( array_unique( apply_filters( 'detour_allowed_hosts', $out ) ) );
+}
+
+/**
+ * Normalize the "Additional hosts" setting to one host per line.
+ */
+function detour_sanitize_allowed_hosts( $raw ) {
+	$hosts = array();
+	foreach ( preg_split( '/[\s,]+/', (string) $raw, -1, PREG_SPLIT_NO_EMPTY ) as $h ) {
+		$h = strtolower( trim( $h ) );
+		if ( strpos( $h, '://' ) !== false ) {
+			$h = (string) wp_parse_url( $h, PHP_URL_HOST );
+		}
+		$h = preg_replace( '/[:\/].*$/', '', $h );
+		if ( '' !== $h && preg_match( '/^[a-z0-9.-]+$/', $h ) ) {
+			$hosts[] = $h;
+		}
+	}
+	return implode( "\n", array_unique( $hosts ) );
+}
+
 function Detour_init_my_options() {
 	add_option( DETOUR_OPTIONS_GROUP );
 
