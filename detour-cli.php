@@ -21,9 +21,11 @@ class Detour_CLI_Command {
 	 * Import rules from a CSV file.
 	 *
 	 * The first row is a header. Recognised columns: source, destination,
-	 * status, match_type, notes, active. Only `source` is required;
+	 * status, match_type, notes, active, live. Only `source` is required;
 	 * `destination` is required unless status is 410. A row whose source and
 	 * match type already exist updates that rule instead of adding a duplicate.
+	 * `live` (0/1) lets a prefix or regex rule also redirect pages that still
+	 * resolve; exact rules always do.
 	 *
 	 * ## OPTIONS
 	 *
@@ -89,6 +91,7 @@ class Detour_CLI_Command {
 				'redirect_status' => isset( $data['status'] ) && '' !== $data['status'] ? (int) $data['status'] : 301,
 				'notes'           => isset( $data['notes'] ) ? $data['notes'] : '',
 				'is_active'       => isset( $data['active'] ) && '' !== $data['active'] ? (int) $data['active'] : 1,
+				'match_live'      => isset( $data['live'] ) ? (int) $data['live'] : 0,
 			);
 
 			$clean = detour_sanitize_rule_input( $input );
@@ -143,11 +146,11 @@ class Detour_CLI_Command {
 		global $wpdb;
 		$rows = $wpdb->get_results(
 			'SELECT id, match_type, source_pattern AS source, destination_url AS destination, redirect_status AS status,
-			        is_active AS active, hit_count, last_hit_at, notes
+			        is_active AS active, match_live AS live, hit_count, last_hit_at, notes
 			   FROM `' . detour_rules_table_name() . '` ORDER BY id',
 			ARRAY_A
 		);
-		$fields = array( 'id', 'match_type', 'source', 'destination', 'status', 'active', 'hit_count', 'last_hit_at', 'notes' );
+		$fields = array( 'id', 'match_type', 'source', 'destination', 'status', 'active', 'live', 'hit_count', 'last_hit_at', 'notes' );
 		WP_CLI\Utils\format_items( $assoc['format'], $rows, $fields );
 	}
 
@@ -159,14 +162,18 @@ class Detour_CLI_Command {
 	 * <url>
 	 * : A full URL or a site-rooted path.
 	 *
+	 * [--live]
+	 * : Treat the URL as a page that still resolves rather than a 404, so
+	 * only exact rules and prefix/regex rules marked live are considered.
+	 *
 	 * @when after_wp_load
 	 */
-	public function test( $args ) {
+	public function test( $args, $assoc ) {
 		$url = $args[0];
 		if ( '/' === substr( $url, 0, 1 ) ) {
 			$url = untrailingslashit( home_url() ) . $url;
 		}
-		$rule = detour_match_rule( $url );
+		$rule = detour_match_rule( $url, ! empty( $assoc['live'] ) );
 		if ( ! $rule ) {
 			WP_CLI::log( 'No rule matches.' );
 			return;

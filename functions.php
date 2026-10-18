@@ -337,13 +337,10 @@ function clear_redirects_log_handler() {
 }
 
 function Detour_get_current_URL() {
-	// Determine protocol securely
+	// is_ssl() covers HTTPS=on and port 443; the forwarded header covers a
+	// TLS-terminating proxy such as Cloudflare.
 	$protocol = 'http://';
-	if ( isset( $_SERVER['HTTPS'] ) && 'off' !== $_SERVER['HTTPS'] ) {
-		$protocol = 'https://';
-	} elseif ( isset( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) && 'https' === $_SERVER['HTTP_X_FORWARDED_PROTO'] ) {
-		$protocol = 'https://';
-	} elseif ( isset( $_SERVER['SERVER_PORT'] ) && 443 === $_SERVER['SERVER_PORT'] ) {
+	if ( is_ssl() || ( isset( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) && 'https' === $_SERVER['HTTP_X_FORWARDED_PROTO'] ) ) {
 		$protocol = 'https://';
 	}
 
@@ -356,8 +353,11 @@ function Detour_get_current_URL() {
 		$host            = sanitize_text_field( trim( $forwarded_hosts[0] ) );
 	}
 
+	// Every fallback below returns an empty string rather than home_url(): a
+	// home_url() fallback would look like a homepage request and match a "/"
+	// rule, sending unrelated traffic to that rule's destination.
 	if ( empty( $host ) ) {
-		return home_url(); // Fallback to WordPress home URL
+		return '';
 	}
 
 	// Validate host against allowed hosts
@@ -381,7 +381,7 @@ function Detour_get_current_URL() {
 
 	if ( ! in_array( $request_host_no_port, $allowed_hosts, true ) ) {
 		error_log( 'Detour: Suspicious host detected - ' . $host );
-		return home_url(); // Security fallback
+		return '';
 	}
 
 	// Sanitize URI
@@ -397,7 +397,7 @@ function Detour_get_current_URL() {
 	// Additional validation
 	if ( strlen( $uri ) > 2000 ) { // URLs shouldn't be this long
 		error_log( 'Detour: Unusually long URI detected' );
-		return home_url();
+		return '';
 	}
 
 	return $protocol . $host . $uri;

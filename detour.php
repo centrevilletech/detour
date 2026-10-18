@@ -3,7 +3,7 @@
  * Plugin Name: Detour
  * Plugin URI:  https://github.com/centrevilletech/detour
  * Description: Catch every 404 and route lost visitors to a destination that converts. Per-URL redirect rules with 301/302/307/308/410 support, sortable hit history, weekly email digests, and an indexed schema engineered for high-traffic sites.
- * Version:     1.5.0
+ * Version:     1.6.0
  * Author:      Centreville Tech LLC
  * Author URI:  https://centrevilletech.com
  * License:     GPL-2.0-or-later
@@ -390,13 +390,18 @@ function detour_redirect() {
 		return;
 	}
 
+	$link = Detour_get_current_URL();
+	if ( '' === $link ) {
+		return; // Unrecognised host or oversized URI: never treat it as a match.
+	}
+
 	// An exact rule names one URL on purpose, so it applies even when that
 	// URL still resolves (an old archive or a page that is being retired).
-	// Prefix and regex rules and the global default only handle 404s, so a
-	// broad pattern can never take over live content.
+	// Prefix and regex rules only handle 404s unless the rule opts in with
+	// "Also redirect live pages", so a broad pattern cannot take over live
+	// content by accident. The global default only ever handles 404s.
 	if ( ! is_404() ) {
 		if ( function_exists( 'detour_match_rule' ) ) {
-			$link = Detour_get_current_URL();
 			$rule = detour_match_rule( $link, true );
 			if ( $rule ) {
 				detour_apply_rule( $rule, $link );
@@ -406,7 +411,6 @@ function detour_redirect() {
 	}
 
 	$options = Detour_get_my_options();
-	$link    = Detour_get_current_URL();
 
 	// Per-URL rules win over the global default. A rule may apply 410 Gone
 	// (no Location header) or any of 301/302/307/308.

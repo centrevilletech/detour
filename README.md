@@ -8,7 +8,8 @@ Detour is a WordPress plugin that intercepts 404 (Not Found) requests and redire
 
 ## Features
 
-- **Per-URL rules** with three match modes: exact, prefix (with optional `{path}` substitution), and regular expression
+- **Per-URL rules** with three match modes: exact, prefix (with optional `{path}` substitution), and regular expression. Exact rules also fire on pages that still exist; prefix and regex rules can opt in to that per rule, for whole-site moves
+- **WP-CLI bulk tools**: `wp detour import rules.csv`, `wp detour export`, `wp detour test <url>`
 - **Five status codes**: 301, 302, 307, 308, and 410 Gone for permanently-deleted pages (the SEO-correct answer for content that will never come back)
 - **Site-wide fallback** for any 404 that does not match a rule, with its own configurable status code
 - **Promote-to-rule** one-click button on the 404 URLs log so you can fix a broken URL the moment you see it
