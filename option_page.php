@@ -181,7 +181,7 @@ function detour_cleanup_image_options() {
 		if ( ! $image_data || empty( $image_data[0] ) ) {
 			// Image doesn't exist, clear the option
 			$options['image_id_p404_redirect_to'] = '';
-			update_option( 'p404_redirect_options', $options );
+			Detour_update_my_options( $options );
 			return false;
 		}
 	}

@@ -114,9 +114,14 @@ function detour_match_candidates( $url ) {
 	$query  = isset( $parts['query'] ) ? $parts['query'] : '';
 	$origin = isset( $parts['scheme'], $parts['host'] ) ? $parts['scheme'] . '://' . $parts['host'] : '';
 
-	$paths = array( $path );
-	if ( '/' !== $path ) {
-		$paths[] = '/' === substr( $path, -1 ) ? rtrim( $path, '/' ) : $path . '/';
+	// Browsers percent-encode spaces and other characters, while rules are
+	// usually written with the literal path (`/old page.html`), so the
+	// decoded path is tried after the path as requested.
+	$paths = array_unique( array( $path, rawurldecode( $path ) ) );
+	foreach ( $paths as $p ) {
+		if ( '/' !== $p ) {
+			$paths[] = '/' === substr( $p, -1 ) ? rtrim( $p, '/' ) : $p . '/';
+		}
 	}
 	$lower = array_map( 'strtolower', $paths );
 	$paths = array_values( array_unique( array_merge( $paths, $lower ) ) );
@@ -188,7 +193,7 @@ function detour_match_rule( $url, $live = false ) {
 	$parts    = wp_parse_url( $url );
 	$path     = ( isset( $parts['path'] ) && '' !== $parts['path'] ? $parts['path'] : '/' )
 		. ( '' !== $query ? '?' . $query : '' );
-	$subjects = array_unique( array( $path, $url ) );
+	$subjects = array_unique( array( $path, rawurldecode( $path ), $url ) );
 
 	// 2. Prefix match - longest-pattern wins.
 	$v            = detour_rules_cache_version();

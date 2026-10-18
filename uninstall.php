@@ -9,7 +9,7 @@
 defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 detour_Uninstall_clear_htaccess();
 function detour_Uninstall_clear_htaccess() {
-	$htaccess_file = wp_upload_dir( null, true, true ) . '/.htaccess';
+	$htaccess_file = WP_CONTENT_DIR . '/.htaccess'; // Where detour_add_htaccess() writes it.
 
 	detour_Uninstall_insert_with_markers_htaccess( $htaccess_file, 'All_404_marker_comment_image', '' );
 }

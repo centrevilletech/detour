@@ -440,7 +440,7 @@ function Detour_init_my_options() {
 	// Initialize default options
 	$options                        = array();
 	$options['p404_redirect_to']    = site_url();
-	$options['p404_status']         = '1';
+	$options['p404_status']         = '2'; // Off until an admin turns it on: a fresh install must not 301 every 404 to the homepage.
 	$options['img_p404_status']     = '2';
 	$options['p404_execlude_media'] = '1';
 	$options['links']               = 0;
@@ -1389,12 +1389,12 @@ function handle_delete_previous_404_image() {
 
 	if ( $image_id ) {
 		// Get current options
-		$options = get_option( 'p404_redirect_options', array() );
+		$options = Detour_get_my_options();
 
 		// Clear the specific option if it matches the image being deleted
 		if ( isset( $options[ $option_name ] ) && $options[ $option_name ] == $image_id ) {
 			$options[ $option_name ] = '';
-			update_option( 'p404_redirect_options', $options );
+			Detour_update_my_options( $options );
 		}
 
 		// Delete the attachment

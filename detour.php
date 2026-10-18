@@ -3,7 +3,7 @@
  * Plugin Name: Detour
  * Plugin URI:  https://github.com/centrevilletech/detour
  * Description: Catch every 404 and route lost visitors to a destination that converts. Per-URL redirect rules with 301/302/307/308/410 support, sortable hit history, weekly email digests, and an indexed schema engineered for high-traffic sites.
- * Version:     1.6.0
+ * Version:     1.7.0
  * Author:      Centreville Tech LLC
  * Author URI:  https://centrevilletech.com
  * License:     GPL-2.0-or-later
@@ -31,6 +31,8 @@ add_action( 'plugins_loaded', 'detour_ensure_schema' );
 
 require_once 'detour-fixes.php';
 require_once 'detour-rules.php';
+require_once 'detour-import.php';
+require_once 'detour-rest.php';
 require_once 'detour-cli.php';
 require_once 'functions.php';
 add_action( 'admin_menu', 'detour_admin_menu' );
@@ -385,6 +387,59 @@ add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'Detour__filte
 
 
 
+/**
+ * True for URLs Detour must never redirect, whatever the rules say, so a
+ * catch-all rule cannot lock administrators out or break core endpoints:
+ * wp-admin, wp-login.php, the WPS Hide Login slug, the REST API, cron,
+ * XML-RPC, robots.txt and /.well-known/ (certificate renewal and similar).
+ */
+function detour_is_excluded_url( $url ) {
+	if ( wp_doing_cron() || ( defined( 'XMLRPC_REQUEST' ) && XMLRPC_REQUEST ) ) {
+		return true;
+	}
+
+	$path      = (string) wp_parse_url( $url, PHP_URL_PATH );
+	$home_path = (string) wp_parse_url( home_url( '/' ), PHP_URL_PATH );
+	if ( '' !== $home_path && '/' !== $home_path && 0 === stripos( $path, untrailingslashit( $home_path ) ) ) {
+		$path = substr( $path, strlen( untrailingslashit( $home_path ) ) );
+	}
+	$path = '/' . ltrim( strtolower( rawurldecode( $path ) ), '/' );
+
+	$prefixes = array(
+		'/wp-admin',
+		'/wp-login.php',
+		'/wp-cron.php',
+		'/xmlrpc.php',
+		'/wp-json',
+		'/' . rest_get_url_prefix(),
+		'/robots.txt',
+		'/.well-known/',
+	);
+	$login_slug = get_option( 'whl_page' ); // WPS Hide Login.
+	if ( is_string( $login_slug ) && '' !== $login_slug ) {
+		$prefixes[] = '/' . trim( strtolower( $login_slug ), '/' );
+	}
+
+	/**
+	 * Filter the path prefixes Detour never redirects.
+	 *
+	 * @param string[] $prefixes Lowercase, site-relative path prefixes.
+	 * @param string   $url      The request URL.
+	 */
+	$prefixes = apply_filters( 'detour_excluded_path_prefixes', $prefixes, $url );
+
+	foreach ( $prefixes as $prefix ) {
+		$bare = untrailingslashit( '/' . ltrim( strtolower( (string) $prefix ), '/' ) );
+		if ( '' === $bare ) {
+			continue;
+		}
+		if ( $path === $bare || 0 === strpos( $path, $bare . '/' ) ) {
+			return true;
+		}
+	}
+	return false;
+}
+
 function detour_redirect() {
 	if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
 		return;
@@ -393,6 +448,9 @@ function detour_redirect() {
 	$link = Detour_get_current_URL();
 	if ( '' === $link ) {
 		return; // Unrecognised host or oversized URI: never treat it as a match.
+	}
+	if ( detour_is_excluded_url( $link ) ) {
+		return; // Login, admin, REST, cron and similar paths are never redirected.
 	}
 
 	// An exact rule names one URL on purpose, so it applies even when that
@@ -546,7 +604,7 @@ function detour_modify_htaccess() {
 			} else {
 				// Image doesn't exist, clear the option
 				$options['image_id_p404_redirect_to'] = '';
-				update_option( 'p404_redirect_options', $options );
+				Detour_update_my_options( $options );
 
 				return array(
 					'status'  => false,
@@ -588,6 +646,23 @@ function detour_clear_htaccess() {
 	$htaccess_file = WP_CONTENT_DIR . '/.htaccess';
 
 	detour_insert_with_markers_htaccess( $htaccess_file, 'All_404_marker_comment_image', '' );
+
+	// Also remove the ErrorDocument block detour_check_default_permalink()
+	// adds to the root .htaccess, so deactivating leaves no trace behind.
+	if ( ! function_exists( 'insert_with_markers' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/misc.php';
+	}
+	if ( ! function_exists( 'get_home_path' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+	}
+	$root = get_home_path() . '.htaccess';
+	if ( file_exists( $root ) && is_writable( $root ) ) {
+		$contents = (string) @file_get_contents( $root );
+		if ( false !== strpos( $contents, '# BEGIN FRedirect_ErrorDocument' ) ) {
+			insert_with_markers( $root, 'FRedirect_ErrorDocument', array() );
+		}
+	}
+	delete_transient( 'centct_p404_htaccess_verified' );
 }
 
 function detour_insert_with_markers_htaccess( $filename, $marker, $insertion ) {
