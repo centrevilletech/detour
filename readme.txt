@@ -4,7 +4,7 @@ Tags: 404, redirect, broken-links, seo, gone
 Requires at least: 5.0
 Tested up to: 6.6
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -92,6 +92,14 @@ Yes. Exact-match rules use a `BINARY(16)` MD5 hash column with its own BTREE ind
 4. The 404 URLs log: sortable hit history with a one-click "Make rule" button on every row.
 
 == Changelog ==
+
+= 1.5.0 =
+* Fixed: Add, Edit, Delete and Toggle on the Rules tab did nothing. The 1.2.0 prefix rename changed the AJAX action names in the JavaScript but not in PHP.
+* Fixed: prefix and regex rules never matched a site-rooted path such as `/old/` because they were tested against the full URL. They now test the path (with query string) first, then the full URL.
+* Exact rules now match a full URL or a site-rooted path, with or without the trailing slash, and fall back to a lowercase path. A rule without a query string also matches requests that have one, and passes that query string on to the destination so campaign tags survive.
+* Exact rules now apply even when the old URL still resolves, such as a leftover archive page. Prefix rules, regex rules and the site-wide default still act only on 404s.
+* Regex destinations accept `$1`-style backreferences.
+* New WP-CLI commands: `wp detour import <file.csv>` (with `--dry-run` and `--replace`), `wp detour export`, and `wp detour test <url>`.
 
 = 1.4.0 =
 * UI rebrand: dropped "404" from headings, navigation, form labels, the admin-bar item, and email digest titles. Replaced with brand-forward labels ("Detour", "Activity", "Default Redirect", "Missing Image Fallback", etc.). Kept "404" where it is the technically meaningful term in body copy.
